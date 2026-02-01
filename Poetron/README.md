@@ -28,6 +28,38 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+## Getting Started (After Cloning)
+
+After cloning the repository, follow these steps to set up and run the project:
+
+1. **Navigate to the project directory:**
+```bash
+cd Poetron
+```
+
+2. **Create and activate a virtual environment:**
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+3. **Install all required dependencies:**
+```bash
+pip install -r requirements.txt
+```
+
+4. **Download the poetry dataset (optional but recommended):**
+```bash
+python download_data.py
+```
+
+5. **Create a sample dataset for faster training (optional):**
+```bash
+python src/sample_data.py
+```
+
+You're now ready to use Poetron! Proceed to the Usage section below.
+
 ## Usage
 
 ### Training the Model

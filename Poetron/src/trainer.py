@@ -1,45 +1,14 @@
-"""
-Model training functionality for the Poetry Generator
-"""
-
-import os
 import torch
-from transformers import GPT2LMHeadModel, GPT2Tokenizer, Trainer, TrainingArguments, DataCollatorForLanguageModeling
-from torch.utils.data import Dataset
-from pathlib import Path
-import json
-from typing import List, Optional
-
-from data_preprocessing import preprocess_poetry_data, split_into_training_chunks, add_style_tokens
-
-
-class PoetryDataset(Dataset):
-    """Custom dataset for poetry training."""
-    
-    def __init__(self, texts: List[str], tokenizer, max_length: int = 512):
-        self.tokenizer = tokenizer
-        self.texts = texts
-        self.max_length = max_length
-        
-    def __len__(self):
-        return len(self.texts)
-    
-    def __getitem__(self, idx):
-        text = str(self.texts[idx])
-        encoding = self.tokenizer(
-            text,
-            truncation=True,
-            padding='max_length',
-            max_length=self.max_length,
-            return_tensors='pt'
-        )
-        
-        return {
-            'input_ids': encoding['input_ids'].flatten(),
-            'attention_mask': encoding['attention_mask'].flatten(),
-            'labels': encoding['input_ids'].flatten()
-        }
-
+from transformers import (
+    GPT2LMHeadModel, 
+    GPT2Tokenizer, 
+    Trainer, 
+    TrainingArguments, 
+    DataCollatorForLanguageModeling,
+    BitsAndBytesConfig
+)
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+# ... (Keep your PoetryDataset and imports the same)
 
 def train_model(
     data_path: str, 
@@ -51,132 +20,83 @@ def train_model(
     learning_rate: float = 5e-5,
     sample_size: int = None
 ):
-    """
-    Train or fine-tune a GPT-2 model on poetry data provided by kaggle.
-    
-    Args:
-        data_path (str): Path to the training data file
-        epochs (int): Number of training epochs
-        model_name (str): Base model name for training
-        output_dir (str): Directory to save the trained model
-        max_length (int): Maximum sequence length
-        batch_size (int): Training batch size
-        learning_rate (float): Learning rate for training
-        sample_size (int): Limit training to first N poems (optional)
-        
-    Returns:
-        str: Path to the trained model
-    """
-    print(f"Loading tokenizer and model: {model_name}")
-    
-    # Initialize tokenizer and model
+    print(f"Loading tokenizer: {model_name}")
     tokenizer = GPT2Tokenizer.from_pretrained(model_name)
-    
-    # Add padding token if it doesn't exist
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    
-    model = GPT2LMHeadModel.from_pretrained(model_name)
-    
-    # Preprocess the training data
+
+    # 1. Configuration for 4-bit Quantization (Saves VRAM for Dual T4)
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.float16, # T4 preferred
+        bnb_4bit_use_double_quant=True,
+    )
+
+    print(f"Loading model with Dual-GPU sharding...")
+    # 2. Load model with device_map="auto" to split across both T4s
+    model = GPT2LMHeadModel.from_pretrained(
+        model_name,
+        quantization_config=bnb_config,
+        device_map="auto", 
+        trust_remote_code=True
+    )
+
+    # 3. Prepare for LoRA Fine-tuning
+    model = prepare_model_for_kbit_training(model)
+    lora_config = LoraConfig(
+        r=16, 
+        lora_alpha=32, 
+        target_modules=["c_attn"], # Specific to GPT-2
+        lora_dropout=0.05, 
+        bias="none", 
+        task_type="CAUSAL_LM"
+    )
+    model = get_peft_model(model, lora_config)
+    model.print_trainable_parameters()
+
+    # --- Data Processing (Keep your existing logic) ---
     print("Preprocessing training data...")
     poems = preprocess_poetry_data(data_path)
-    
-    # Sample if specified
     if sample_size:
         poems = poems[:sample_size]
-        print(f"Limited to {sample_size} samples")
     
-    # Add style tokens to differentiate poem types during training
-    # For now, we'll add a generic poetry token, but this could be expanded
     poems_with_tokens = add_style_tokens(poems, "POETRY")
-    
-    # Split into training chunks
     training_chunks = split_into_training_chunks(poems_with_tokens, max_length)
-    
-    print(f"Loaded {len(training_chunks)} training samples")
-    
-    # Create dataset
     dataset = PoetryDataset(training_chunks, tokenizer, max_length)
     
-    # Define data collator
-    data_collator = DataCollatorForLanguageModeling(
-        tokenizer=tokenizer,
-        mlm=False,  # We're doing causal LM, not masked LM
-    )
-    
-    # Define training arguments
+    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+
+    # 4. Optimized Training Arguments for T4
     training_args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=epochs,
         per_device_train_batch_size=batch_size,
-        save_steps=10_000,
-        save_total_limit=2,
-        prediction_loss_only=True,
+        gradient_accumulation_steps=4,   # Increases effective batch size without OOM
         learning_rate=learning_rate,
-        logging_dir=f'{output_dir}/logs',
-        logging_steps=100,
-        report_to=[],  # Disable reporting to external services
-        remove_unused_columns=False,  # Important for custom datasets especially small ones where performance issues may be present
+        fp16=True,                       # Hardware acceleration for T4
+        logging_steps=10,
+        max_grad_norm=0.3,               # Stability for quantized training
+        optim="paged_adamw_32bit",       # Offloads optimizer states to CPU if needed
+        save_total_limit=2,
+        report_to="none",
+        remove_unused_columns=False,
     )
-    
-    # Initialize trainer
+
     trainer = Trainer(
         model=model,
         args=training_args,
         data_collator=data_collator,
         train_dataset=dataset,
     )
-    
-    print("Starting training!")
-    
-    # Train the model
+
+    print("Starting training on Dual T4!")
     trainer.train()
-    
-    # Save the trained model
+
+    # 5. Save the PEFT Adapter
     model_output_dir = f"{output_dir}/poetry_model_finetuned"
-    trainer.save_model(model_output_dir)
+    trainer.model.save_pretrained(model_output_dir)
     tokenizer.save_pretrained(model_output_dir)
     
-    # Save training configuration
-    config = {
-        'model_name': model_name,
-        'epochs_trained': epochs,
-        'max_length': max_length,
-        'batch_size': batch_size,
-        'learning_rate': learning_rate,
-        'training_data_path': data_path
-    }
-    
-    config_path = f"{model_output_dir}/training_config.json"
-    with open(config_path, 'w') as f:
-        json.dump(config, f, indent=2)
-    
     print(f"Model trained and saved to {model_output_dir}")
-    
     return model_output_dir
-
-
-def load_trained_model(model_path: str):
-    """
-    Load a previously trained model.
-    
-    Args:
-        model_path (str): Path to the trained model
-        
-    Returns:
-        Tuple: (model, tokenizer)
-    """
-    model_path = Path(model_path)
-    
-    if not model_path.exists():
-        raise ValueError(f"Model path does not exist: {model_path}")
-    
-    tokenizer = GPT2Tokenizer.from_pretrained(str(model_path))
-    model = GPT2LMHeadModel.from_pretrained(str(model_path))
-    
-    # Ensure pad token exists
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    
-    return model, tokenizer

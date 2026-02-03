@@ -8,6 +8,7 @@ from transformers import GPT2LMHeadModel, GPT2Tokenizer
 
 sys.path.insert(0, str(Path(__file__).parent))
 from utils import format_poem_for_style, export_poem
+from load_kaggle_model import load_kaggle_model
 
 
 def load_model(model_path: str):

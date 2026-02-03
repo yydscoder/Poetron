@@ -22,24 +22,28 @@ def cli():
 
 
 @cli.command()
-@click.option('--style', '-s', type=click.Choice(['haiku', 'sonnet', 'freeverse']), 
+@click.option('--style', '-s', type=click.Choice(['haiku', 'sonnet', 'freeverse']),
               default='haiku', help='Poem style to generate')
 @click.option('--seed', '-sd', default='', help='Seed words or themes for the poem')
 @click.option('--length', '-l', default=50, type=int, help='Maximum length of the poem (for free verse)')
 @click.option('--api', is_flag=True, help='Use API for generation instead of local model')
+@click.option('--api-model', default='gpt2', help='Model to use for API generation (e.g., gpt2, facebook/opt-350m)')
 @click.option('--export', is_flag=True, help='Export the poem to a file')
-@click.option('--model-path', default='./models/poetry_model', help='Path to the trained model')
-def generate(style, seed, length, api, export, model_path):
+@click.option('--model-path', default='./models/poetry_model', help='Path to the trained local model')
+def generate(style, seed, length, api, api_model, export, model_path):
     """Generate a poem in the specified style."""
     click.echo(f"Generating {style} poem with seed: '{seed}'")
-    
-    poem = generate_poem(style, seed, length, api, model_path)
-    
+
+    if api:
+        click.echo(f"Using API with model: {api_model}")
+
+    poem = generate_poem(style, seed, length, api, model_path, api_model)
+
     click.echo("\nGenerated Poem:")
     click.echo("="*50)
     click.echo(poem)
     click.echo("="*50)
-    
+
     if export:
         from utils import export_poem
         filename = export_poem(poem, style)

@@ -4,92 +4,116 @@ Poetry generation functionality for the Poetry Generator
 
 import torch
 import random
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
 from pathlib import Path
 import re
 
-from trainer import load_trained_model
-from utils import format_poem_for_style
+try:
+    from .utils import format_poem_for_style
+    from .refiner import refine_with_api
+except ImportError:
+    from utils import format_poem_for_style
+    from refiner import refine_with_api
 
 
 def generate_poem(
-    style: str, 
-    seed: str = "", 
-    length: int = 50, 
-    model_path: str = "./models/poetry_model", 
+    style: str,
+    seed: str = "",
+    length: int = 50,
+    model_path: str = "models/kaggle_trained_model",
     temperature: float = 0.8,
     max_new_tokens: int = 100
 ):
     """
-    Generate a poem in the specified style.
-    
+    Generate a poem in the specified style using LoRA model.
+    Falls back to rule-based generation if model unavailable.
+
     Args:
         style (str): The style of poem to generate ('haiku', 'sonnet', 'freeverse')
         seed (str): Seed words or themes for the poem
         length (int): Desired length of the poem (for free verse)
-        model_path (str): Path to the trained model
+        model_path (str): Path to the trained LoRA adapter
         temperature (float): Sampling temperature for generation
         max_new_tokens (int): Maximum number of new tokens to generate
-        
+
     Returns:
         str: Generated poem
     """
     # Prepare the prompt with style token
-    style_token = f"<{style.upper()}>"
-    prompt = f"{style_token} {seed}".strip()
-    
-    # If no seed is provided, use a generic prompt for the stylem this is also for debugging to ensure that there are no crashes involved and if this specific poem were to pop up we would know that there is someting wrong 
-    if not seed.strip():
-        if style.lower() == 'haiku':
-            prompt = f"{style_token} Morning dew glistens"
-        elif style.lower() == 'sonnet':
-            prompt = f"{style_token} Upon a time when love was pure and bright"
-        else:  # freeverse
-            prompt = f"{style_token} The world unfolds"
-    
+    style_token = f"<POETRY>"
+    prompt = f"{style_token} {seed}".strip() if seed.strip() else style_token
+
     try:
-        # Load the trained model
-        model, tokenizer = load_trained_model(model_path)
-        
-        # Encode the prompt
-        inputs = tokenizer.encode(prompt, return_tensors='pt')
-        
-        # Generate text
-        with torch.no_grad():
-            outputs = model.generate(
-                inputs, 
-                max_length=len(inputs[0]) + max_new_tokens,
+        # Try to load and use the LoRA model
+        from load_kaggle_model import load_kaggle_model
+
+        model_path_obj = Path(model_path)
+        if model_path_obj.exists():
+            print(f"🧠 Loading trained LoRA model from {model_path}...")
+
+            # Load model (Body + Brain)
+            poetry_model = load_kaggle_model(model_path)
+            poetry_model.load_tokenizer()
+
+            # Generate using the model
+            poems = poetry_model.generate_poem(
+                prompt=prompt,
+                max_length=max_new_tokens,
                 temperature=temperature,
-                do_sample=True,
-                pad_token_id=tokenizer.eos_token_id,
-                eos_token_id=tokenizer.encode('\n')[0] if '\n' in tokenizer.get_vocab() else None
+                num_return_sequences=1,
+                style=style,  # Pass the style to influence generation parameters
+                max_new_tokens=max_new_tokens
             )
-        
-        # Decode the generated text
-        generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-        
-        # Extract the poem part (remove the prompt)
-        poem_part = generated_text[len(prompt):].strip()
-        
-        # Format according to style
-        formatted_poem = format_poem_for_style(poem_part, style)
-        
-        return formatted_poem
-        
+
+            generated_text = poems[0] if poems else generate_fallback_poem(style, seed)
+
+            # Extract the actual poem by removing the prompt part
+            # Find where the actual poem starts after the prompt
+            if prompt in generated_text:
+                raw_poem = generated_text[len(prompt):].strip()
+            else:
+                raw_poem = generated_text.strip()
+
+            # Clean up the raw poem to remove special characters and control characters
+            import re
+            # Remove control characters (except newlines and tabs)
+            cleaned_raw = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', raw_poem)
+            # Remove extra whitespace and normalize line breaks
+            cleaned_raw = re.sub(r'\r\n', '\n', cleaned_raw)
+            cleaned_raw = re.sub(r'\r', '\n', cleaned_raw)
+            cleaned_raw = re.sub(r'\n+', '\n', cleaned_raw)
+
+            # Remove the "seed style:" part that appears in the output
+            # This pattern appears to be "trees haiku:" or similar
+            cleaned_raw = re.sub(r'\w+\s+' + style + r':?\s*', '', cleaned_raw, flags=re.IGNORECASE)
+
+            cleaned_raw = cleaned_raw.strip()
+
+            # Apply style formatting
+            formatted_raw = format_poem_for_style(cleaned_raw, style)
+
+            # For now, return the formatted raw output since API refinement is not working properly
+            # Refine the poem using the API to improve quality and structure
+            # refined_poem = refine_with_api(formatted_raw, style, seed)
+
+            # Return the formatted raw output for now
+            return formatted_raw
+        else:
+            raise FileNotFoundError(f"Model not found at {model_path}")
+
     except Exception as e:
-        # Fallback response if model loading or generation fails
-        print(f"Error generating poem: {e}")
+        # Fallback to rule-based generation
+        print(f"📝 Using fallback poem generator ({str(e)[:50]}...)")
         return generate_fallback_poem(style, seed)
 
 
 def generate_fallback_poem(style: str, seed: str = ""):
     """
     Generate a fallback poem if the model fails.
-    
+
     Args:
         style (str): The style of poem to generate
         seed (str): Seed words or themes for the poem
-        
+
     Returns:
         str: Fallback poem for flagging
     """
@@ -100,7 +124,7 @@ def generate_fallback_poem(style: str, seed: str = ""):
             "Sunlight paints the leaves"
         ]
         return "\n".join(lines[:3])
-    
+
     elif style.lower() == 'sonnet':
         lines = [
             f"When {seed} fills the air with gentle thought," if seed else "When morning light breaks through the silent dawn,",
@@ -119,7 +143,7 @@ def generate_fallback_poem(style: str, seed: str = ""):
             "To beauty found in time's eternal grace."
         ]
         return "\n".join(lines[:14])
-    
+
     else:  # freeverse
         lines = [
             seed if seed else "The world breathes",
@@ -142,19 +166,19 @@ def generate_fallback_poem(style: str, seed: str = ""):
 def enforce_haiku_structure(text: str) -> str:
     """
     Attempt to format text as a haiku (3 lines with 5-7-5 syllable pattern).
-    
+
     Note: This is a simplified approximation and doesn't perfectly count syllables.
     A more sophisticated approach would be needed for accurate syllable counting.
-    
+
     Args:
         text (str): Input text to format as haiku
-        
+
     Returns:
         str: Text formatted as haiku
     """
     lines = text.split('\n')
     haiku_lines = []
-    
+
     # Take first three lines or create three lines from the text
     for i in range(3):
         if i < len(lines) and lines[i].strip():
@@ -169,28 +193,28 @@ def enforce_haiku_structure(text: str) -> str:
                 haiku_lines.append(' '.join(line_words))
                 # Remove used words
                 words = words[word_counts[i]:] if i < len(word_counts) else words[5:]
-    
+
     return '\n'.join(haiku_lines[:3])
 
 
 def generate_with_style_control(style: str, seed: str, model_path: str, temperature: float = 0.8):
     """
     Generate a poem with enhanced style control.
-    
+
     Args:
         style (str): The style of poem to generate
         seed (str): Seed words or themes for the poem
         model_path (str): Path to the trained model
         temperature (float): Sampling temperature
-        
+
     Returns:
         str: Generated poem with style control
     """
     # This would implement more sophisticated style control
     # For now, we will use the basic generation with post-processing
     poem = generate_poem(style, seed, model_path=model_path, temperature=temperature)
-    
+
     if style.lower() == 'haiku':
         return enforce_haiku_structure(poem)
-    
+
     return poem

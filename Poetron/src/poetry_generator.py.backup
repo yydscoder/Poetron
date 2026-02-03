@@ -1,0 +1,110 @@
+"""
+Poetry generation functionality for the Poetry Generator
+"""
+
+import torch
+import random
+from pathlib import Path
+import re
+
+try:
+    from .utils import format_poem_for_style
+except ImportError:
+    from utils import format_poem_for_style
+
+
+def generate_poem(
+    style: str,
+    seed: str = "",
+    length: int = 50,
+    model_path: str = "models/kaggle_trained_model",
+    temperature: float = 0.8,
+    max_new_tokens: int = 100
+):
+    """
+    Generate a poem in the specified style using LoRA model.
+    """
+    style_token = f"<POETRY>"
+    # Constructing a stronger prompt to guide the model's intent
+    prompt = f"{style_token} {seed}".strip() if seed.strip() else style_token
+    
+    try:
+        from load_kaggle_model import load_kaggle_model
+        
+        model_path_obj = Path(model_path)
+        if model_path_obj.exists():
+            print(f"🧠 Loading trained LoRA model from {model_path}...")
+            
+            poetry_model = load_kaggle_model(model_path)
+            poetry_model.load_tokenizer()
+            
+            # CRITICAL FIX: Added min_new_tokens to force multiple lines
+            # and adjusted top_p for better variety
+            poems = poetry_model.generate_poem(
+                prompt=prompt,
+                max_length=max_new_tokens,
+                min_new_tokens=25,  # Force the model to "speak" enough for 3 lines
+                temperature=temperature,
+                num_return_sequences=1,
+                style=style
+            )
+            
+            generated_text = poems[0] if poems else generate_fallback_poem(style, seed)
+
+            # Extract the actual poem content
+            if prompt in generated_text:
+                poem = generated_text[len(prompt):].strip()
+            else:
+                poem = generated_text.strip()
+
+            # Pass to the cleaner/formatter
+            if style.lower() == 'haiku':
+                return enforce_haiku_structure(poem)
+            
+            return format_poem_for_style(poem, style)
+        else:
+            raise FileNotFoundError(f"Model not found at {model_path}")
+            
+    except Exception as e:
+        print(f"📝 Using fallback poem generator ({str(e)[:50]}...)")
+        return generate_fallback_poem(style, seed)
+
+
+def enforce_haiku_structure(text: str) -> str:
+    """
+    Strictly formats text into 3 lines, cleaning up artifacts.
+    """
+    # 1. Clean up "Reddit-isms" and encoding artifacts
+    text = re.sub(r'RandomRedditor|http\S+|[^\w\s,.\']', '', text)
+    # Remove excessive newlines/spaces
+    text = " ".join(text.split())
+    
+    words = text.split()
+    
+    # If the model gave us almost nothing, return as is
+    if len(words) < 3:
+        return text 
+
+    # 2. Heuristic word-to-syllable mapping (approx 5-7-5 syllables)
+    # We aim for roughly 4 words, 6 words, 4 words
+    line1 = " ".join(words[:4])
+    line2 = " ".join(words[4:10])
+    line3 = " ".join(words[10:15]) # Stop at 15 to keep it a true Haiku length
+    
+    # Capitalize lines and strip trailing commas
+    haiku = [line.strip().capitalize().rstrip(',') for line in [line1, line2, line3] if line]
+    
+    return "\n".join(haiku)
+
+
+def generate_fallback_poem(style: str, seed: str = ""):
+    """Fallback generator for errors."""
+    if style.lower() == 'haiku':
+        return f"{seed if seed else 'Silent morning'}\nWhispers to the sleeping world\nSunlight starts to dance"
+    elif style.lower() == 'sonnet':
+        return "When beauty fades and winter's chill descends...\n[Standard Sonnet Fallback]"
+    return "The world breathes in rhythms unknown..."
+
+def generate_with_style_control(style: str, seed: str, model_path: str, temperature: float = 0.8):
+    """Wrapper for external CLI calls."""
+    return generate_poem(style, seed, model_path=model_path, temperature=temperature)

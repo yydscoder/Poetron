@@ -23,12 +23,12 @@ The easiest way to get started with Poetron is by using the `quickstart.sh` scri
     bash quickstart.sh
     ```
 
-    The script will:
-    - Set up a virtual environment.
-    - Install all necessary dependencies.
-    - Download the pre-trained model.
-    - Test the system with a sample poem.
-    - Optionally configure an API key for enhanced refinement.
+    The script provides an interactive setup experience and will:
+    - Prompt you to enter an optional API key for poem refinement.
+    - Set up a Python virtual environment (`venv`).
+    - Install all necessary dependencies directly (e.g., `torch`, `transformers`) for an inference-only setup.
+    - Download and extract the pre-trained poetry model from Kaggle.
+    - Run a test generation to verify the setup is successful.
 
 ### Manual Installation
 
@@ -80,6 +80,11 @@ python interactive_poet.py
 ```
 
 ### Training the Model
+
+Note: The `quickstart.sh` script sets up an inference-only environment. To train the model, you must follow the manual installation and then install additional dependencies and also have the requirements for doing so on your machine witrh pytorch:
+```bash
+pip install -r requirements-training.txt
+```
 
 To train the model on your own poetry data:
 

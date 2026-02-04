@@ -16,6 +16,7 @@ parts/
 sdist/
 var/
 wheels/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
@@ -39,7 +40,18 @@ models/
 outputs/
 *.csv
 !data/PoetryFoundationData_small.csv
-checkpoint-*/
+models/*/checkpoint-*/
+models/*/runs/
+*.bin
+*.safetensors
+*.pth
+*.pt
+*.ckpt
+*.model
+debug_data.py
+.env
+config.local
+*.local
 
 # Jupyter
 .ipynb_checkpoints/

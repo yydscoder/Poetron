@@ -7,7 +7,7 @@ import os
 from typing import Optional
 
 
-def generate_poem_via_api(style: str, seed: str, length: int = 50, api_url: Optional[str] = None, api_token: Optional[str] = None) -> str:
+def generate_poem_via_api(style: str, seed: str, length: int = 50, api_url: Optional[str] = None, api_token: Optional[str] = None, api_model: str = "openai/gpt-5-mini") -> str:
     """
     Generate a poem using a remote API.
     
@@ -21,66 +21,70 @@ def generate_poem_via_api(style: str, seed: str, length: int = 50, api_url: Opti
     Returns:
         str: Generated poem
     """
-    # Use environment variable for API URL if not provided
+    # Use environment variable for API URL if not provided (default to Hack Club proxy)
     if not api_url:
-        api_url = os.getenv('HF_API_URL', 'https://api-inference.huggingface.co/models/')
-    
+        api_url = os.getenv('POETRON_API_URL', 'https://ai.hackclub.com/proxy/v1/chat/completions')
+
     # Use environment variable for API token if not provided
     if not api_token:
-        api_token = os.getenv('HF_API_TOKEN')
-    
+        api_token = os.getenv('POETRON_API_KEY')
+
     if not api_token:
-        return "Error: No API token provided. Please set HF_API_TOKEN environment variable."
+        return "Error: No API token provided. Please set POETRON_API_KEY environment variable."
     
-    # Construct the payload for the API request
+    # Construct the payload for the chat-style API request (HackClub proxy / OpenAI-compatible)
     headers = {
         "Authorization": f"Bearer {api_token}",
         "Content-Type": "application/json"
     }
-    
-    # Prepare the prompt with style information
+
+    # Build a concise user prompt
     style_prompts = {
-        'haiku': f"Generate a haiku about {seed or 'nature'}:",
-        'sonnet': f"Generate a sonnet about {seed or 'love'}:",
-        'freeverse': f"Generate a free verse poem about {seed or 'life'}:"
+        'haiku': f"Create a haiku about {seed or 'nature'}. Reply only with the poem between <<<POEM>>> and <<<END>>> (3 lines, 5-7-5).",
+        'sonnet': f"Create a sonnet about {seed or 'love'}. Reply only with the poem between <<<POEM>>> and <<<END>>> (14 lines).",
+        'freeverse': f"Create a free verse poem about {seed or 'life'}. Reply only with the poem between <<<POEM>>> and <<<END>>>."
     }
-    
-    prompt = style_prompts.get(style.lower(), f"Generate a {style} poem about {seed}:")
-    
+
+    user_prompt = style_prompts.get(style.lower(), f"Create a {style} poem about {seed}. Reply only with the poem between <<<POEM>>> and <<<END>>>.")
+
     payload = {
-        "inputs": prompt,
-        "parameters": {
-            "max_new_tokens": length,
-            "temperature": 0.8,
-            "top_p": 0.9,
-            "repetition_penalty": 1.2
-        }
+        "model": api_model,
+        "messages": [
+            {"role": "system", "content": "You are a poetry editor. Transform prompts into clean, well-formed poems."},
+            {"role": "user", "content": user_prompt}
+        ],
+        "temperature": 0.6,
+        "max_tokens": max(64, length * 4)
     }
-    
+
     try:
-        # Make the API request
-        response = requests.post(api_url, headers=headers, json=payload)
-        
-        # Check if the request was successful
-        if response.status_code == 200:
-            result = response.json()
-            
-            # Extract the generated text
-            if isinstance(result, list) and len(result) > 0:
-                generated_text = result[0].get('generated_text', '')
-                
-                # Remove the original prompt from the response
-                if prompt in generated_text:
-                    poem = generated_text.replace(prompt, '').strip()
-                else:
-                    poem = generated_text.strip()
-                
-                return poem
+        response = requests.post(api_url, headers=headers, json=payload, timeout=15)
+        response.raise_for_status()
+        result = response.json()
+
+        # Try chat completion response format
+        if isinstance(result, dict) and 'choices' in result and len(result['choices']) > 0:
+            choice = result['choices'][0]
+            # Chat-style
+            content = None
+            if 'message' in choice and isinstance(choice['message'], dict):
+                content = choice['message'].get('content')
             else:
-                return f"Error: Unexpected API response format: {result}"
-        else:
-            return f"Error: API request failed with status {response.status_code}: {response.text}"
-    
+                content = choice.get('text') or choice.get('message')
+
+            if content:
+                text = content.strip()
+                # Extract between markers if present
+                if '<<<POEM>>>' in text and '<<<END>>>' in text:
+                    poem = text.split('<<<POEM>>>', 1)[1].split('<<<END>>>', 1)[0].strip()
+                else:
+                    poem = text
+
+                return poem
+
+        # Fallback: unexpected format
+        return f"Error: Unexpected API response format: {result}"
+
     except requests.exceptions.RequestException as e:
         return f"Error: Failed to connect to API: {str(e)}"
     except Exception as e:

@@ -4,7 +4,7 @@ Poetron is an AI-powered poetry generation system that uses a fine-tuned GPT-2 m
 
 ## Features
 
-- Fine-tuned GPT-2 model trained on poetry datasets
+- Fine-tuned local GPT-2 model trained on poetry datasets from kaggle
 - Generate poems in different styles: haiku, sonnet, and free verse
 - Interactive command-line interface for seamless poetry creation
 - Save your favorite poems to files
@@ -114,6 +114,6 @@ If you prefer manual setup:
 
 Poetron uses a GPT-2 model fine-tuned on poetry datasets, enabling it to generate creative and contextually relevant poems across multiple styles. The model understands poetic structure, rhythm, and imagery to create original compositions.
 
----
+Limitations - There is a limitation since GPT2 isnt very good at indexing data and may come out with related, but not grammatically correct outputs which is what the hackclub API is for, using it is reccomended but optional 
 
 Enjoy creating beautiful poetry with Poetron! 

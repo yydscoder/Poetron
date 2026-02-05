@@ -155,7 +155,8 @@ def get_api_token():
     Returns:
         str: API token or None if not found
     """
-    return os.getenv('HF_API_TOKEN')
+    # Prefer POETRON_API_KEY (HackAI / Hack Club proxy)
+    return os.getenv('POETRON_API_KEY')
 
 
 def check_model_exists(model_path):

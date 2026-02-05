@@ -39,19 +39,35 @@ def refine_with_api(raw_poetry, style="haiku", seed=""):
         }
     }
 
-    # 3. BUILD PROMPT
+    # 3. BUILD PROMPT with a small few-shot examples to reduce gibberish
     control = controls.get(style.lower(), controls["freeverse"])
-    prompt = f"""
-    Transform this raw text into a {style}:
-    {control['instructions']}
-    {control['constraints']}
-    
-    Raw text: {raw_poetry}
-    
-    Theme: {seed}
-    
-    Refined poem:
-    """
+
+    few_shot_examples = {
+        'haiku': (
+            "Raw text: golden horizon, waves and light.\nTheme: ocean\n\nRefined:\n<<<POEM>>>\nGolden tide at dawn\nLight slips across the water\nSoft breath of the sea\n<<<END>>>"
+        ),
+        'sonnet': (
+            "Raw text: love and time entwined in quiet mornings.\nTheme: love\n\nRefined:\n<<<POEM>>>\nWhen morning draws its curtains on the day,\nSoft light recalls the warmth of yesterday;\n<<<END>>>"
+        ),
+        'freeverse': (
+            "Raw text: wandering city streets, neon, rain.\nTheme: night\n\nRefined:\n<<<POEM>>>\nNeon pools on pavement, footsteps melt into rain,\nA hush that knows the city by its breath\n<<<END>>>"
+        )
+    }
+
+    example_block = few_shot_examples.get(style.lower(), '')
+
+    prompt_lines = []
+    if example_block:
+        prompt_lines.append("Examples:\n")
+        prompt_lines.append(example_block)
+        prompt_lines.append('\n---\n')
+
+    prompt_lines.append(f"Instructions: {control['instructions']} {control['constraints']}")
+    prompt_lines.append(f"Raw text: {raw_poetry}")
+    prompt_lines.append(f"Theme: {seed}")
+    prompt_lines.append("Refined poem between <<<POEM>>> and <<<END>>>:")
+
+    prompt = "\n".join(prompt_lines).strip()
 
     # 4. API REQUEST
     headers = {
@@ -62,10 +78,10 @@ def refine_with_api(raw_poetry, style="haiku", seed=""):
     payload = {
         "model": "openai/gpt-5-mini",
         "messages": [
-            {"role": "system", "content": "You are a poetry editor. Transform raw text into structured poetry."},
+            {"role": "system", "content": "You are a helpful poetry editor. Return only the refined poem between <<<POEM>>> and <<<END>>> with no extra commentary."},
             {"role": "user", "content": prompt}
         ],
-        "temperature": 0.7,
+        "temperature": 0.6,
         "max_tokens": 200
     }
 

@@ -22,7 +22,7 @@ def generate_poem(style, seed, length, api, model_path, api_model='gpt2'):
         str: Generated poem
     """
     if api:
-        return generate_poem_via_api(style, seed, length, model_name=api_model)
+        return generate_poem_via_api(style, seed, length, api_model=api_model)
     else:
         return local_generate_poem(style, seed, length, model_path)
 

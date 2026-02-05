@@ -6,6 +6,7 @@ import torch
 import random
 from pathlib import Path
 import re
+import os
 
 try:
     from .utils import format_poem_for_style
@@ -90,12 +91,18 @@ def generate_poem(
 
             # Apply style formatting
             formatted_raw = format_poem_for_style(cleaned_raw, style)
+            # Conditionally refine via API if POETRON_API_KEY is provided
+            api_key = os.getenv('POETRON_API_KEY')
+            if api_key:
+                try:
+                    refined_poem = refine_with_api(formatted_raw, style, seed)
+                    # If refinement returned an error string, fall back to formatted_raw
+                    if isinstance(refined_poem, str) and refined_poem.startswith("Error:"):
+                        return formatted_raw
+                    return refined_poem
+                except Exception:
+                    return formatted_raw
 
-            # For now, return the formatted raw output since API refinement is not working properly
-            # Refine the poem using the API to improve quality and structure
-            # refined_poem = refine_with_api(formatted_raw, style, seed)
-
-            # Return the formatted raw output for now
             return formatted_raw
         else:
             raise FileNotFoundError(f"Model not found at {model_path}")

@@ -1,135 +1,119 @@
-# Poetron - Poetry Generation System
+# Poetron - AI-Powered Poetry Generator
 
-Poetron is an AI-powered poetry generation system that uses transformer models to create original poems in various styles. This project was analyzed and refactored to improve clarity and remove redundancies. Several irrelevant files were removed, including backup files, duplicate requirement files, and redundant scripts. The project structure was also simplified.
+Poetron is an AI-powered poetry generation system that uses a fine-tuned GPT-2 model to create original poems in various styles. Experience the magic of AI-generated poetry through an intuitive interactive interface.
 
 ## Features
 
-- Fine-tuned GPT-2 model on poetry datasets
-- Generate poems in different styles (haiku, sonnet, free verse)
-- Support for custom training data
-- Command-line interface for easy usage
-- API integration for enhanced poetry refinement (optional)
+- Fine-tuned GPT-2 model trained on poetry datasets
+- Generate poems in different styles: haiku, sonnet, and free verse
+- Interactive command-line interface for seamless poetry creation
+- Save your favorite poems to files
 
-## How to Run Poetron From Scratch
+## Quick Start
 
-The easiest way to get started with Poetron is by using the `quickstart.sh` script. This script will automate the entire setup process.
+Get started with Poetron in just two steps:
 
-### Automated Setup (Recommended)
+### 1. Run the Setup Script
 
-1.  **Run the Quickstart Script:**
-    Open your terminal and run the following command from the project's root directory:
-
-    ```bash
-    bash quickstart.sh
-    ```
-
-    The script provides an interactive setup experience and will:
-    - Prompt you to enter an optional API key for poem refinement.
-    - Set up a Python virtual environment (`venv`).
-    - Install all necessary dependencies directly (e.g., `torch`, `transformers`) for an inference-only setup.
-    - Download and extract the pre-trained poetry model from Kaggle.
-    - Run a test generation to verify the setup is successful.
-
-### Manual Installation
-
-If you prefer to install manually, follow these steps:
-
-1.  **Navigate to the project directory:**
-    ```bash
-    cd Poetron
-    ```
-
-2.  **Create and activate a virtual environment:**
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # On Windows: venv\Scripts\activate
-    ```
-
-3.  **Install all required dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-4.  **Download the pre-trained model:**
-    ```bash
-    bash download_kaggle_trained_model.sh
-    ```
-
-## Usage
-
-### Generating Poems
-
-To generate a poem:
+Open your terminal in the project's root directory and run:
 
 ```bash
-python poetry_cli.py generate --style haiku --seed "YOUR PROMPT GOES HERE"
+bash quickstart.sh
 ```
 
-Available styles: `haiku`, `sonnet`, `freeverse`
+This automated script will:
+- Set up a Python virtual environment
+- Install all necessary dependencies (`torch`, `transformers`, etc.)
+- Download the pre-trained poetry model from Kaggle
+- Verify the setup with a test generation
 
-### API Integration (Optional)
+### 2. Launch Interactive Mode
 
-For enhanced poetry refinement, you can provide an API key during the quickstart process or by setting the `POETRON_API_KEY` environment variable. The system will automatically use the API to refine generated poems when available.
-
-### Interactive Mode
-
-For an interactive poetry creation experience:
+Once setup is complete, start creating poetry:
 
 ```bash
+cd Poetron
 python interactive_poet.py
 ```
 
-### Training the Model
+## Using Interactive Mode
 
-Note: The `quickstart.sh` script sets up an inference-only environment. To train the model, you must follow the manual installation and then install additional dependencies and also have the requirements for doing so on your machine witrh pytorch:
-```bash
-pip install -r requirements-training.txt
+The interactive mode provides a friendly, guided experience:
+
+1. **Select Your Style**: Choose from haiku, sonnet, or free verse
+2. **Enter Your Theme**: Provide a topic or theme for your poem (e.g., "ocean", "love", "stars")
+3. **Receive Your Poem**: The AI generates an original poem based on your selections
+4. **Save (Optional)**: Choose to save your poem to a file in the `outputs/` directory
+5. **Create More**: Generate additional poems or exit when finished
+
+### Example Session
+
+```
+Welcome to Poetron - AI-Powered Poetry Generator!
+============================================================
+I can help you create beautiful poems in various styles.
+
+Available poem styles:
+  1) Haiku - 3 lines with approximately 5-7-5 syllable pattern
+  2) Sonnet - 14 lines with traditional structure
+  3) Freeverse - Free-form poetry with expressive imagery
+  4) Exit
+
+Select a style (1-4): 1
+
+Selected style: Haiku
+
+What would you like your haiku to be about? (e.g., 'love', 'nature', 'ocean'): sunset
+
+Generating your haiku about 'sunset'...
+
+Your poem is ready!
+==================================================
+Golden rays descend
+Silent whispers paint the sky
+Day bids night hello
+==================================================
+
+Would you like to save this poem to a file? (y/n): y
+
+Poem saved to: outputs/haiku_20260205_143022.txt
 ```
 
-To train the model on your own poetry data:
+## Manual Installation
 
-```bash
-python poetry_cli.py train --data path/to/your/data.csv --epochs 3
-```
+If you prefer manual setup:
 
-## Project Structure
+1. Navigate to the Poetron directory:
+   ```bash
+   cd Poetron
+   ```
 
-- `poetry_cli.py` - Main command-line interface
-- `interactive_poet.py` - Interactive poetry creation interface
-- `src/` - Source code modules
-  - `cli.py` - Command-line interface definitions
-  - `cli_commands.py` - CLI command implementations
-  - `trainer.py` - Model training functionality
-  - `data_preprocessing.py` - Data loading and preprocessing
-  - `poetry_generator.py` - Poem generation logic
-  - `refiner.py` - API-based poem refinement
-  - `utils.py` - Utility functions
-- `models/` - Trained models
-- `data/` - Poetry datasets (if added)
-- `outputs/` - Generated poems
+2. Create and activate a virtual environment:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
 
-## Configuration
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-### API Key Setup
+4. Download the pre-trained model:
+   ```bash
+   bash download_kaggle_trained_model.sh
+   ```
 
-For enhanced post generation poetry refinement, you can provide an API key:
+## Troubleshooting
 
-1. During the quickstart process
-2. By setting an environment variable:
-```bash
-export POETRON_API_KEY="your-api-key-here"
-```
-3. By saving it to a `.env` file:
-```bash
-echo "POETRON_API_KEY=your-api-key-here" > .env
-source .env
-```
+- **Model not found**: Ensure the `download_kaggle_trained_model.sh` script completed successfully
+- **Import errors**: Verify that your virtual environment is activated and all dependencies are installed
+- **Generation errors**: Check that the model files are present in `models/poetry_model/`
 
-## Customization
+## About the Model
 
-You can customize the system by:
-- Using your own poetry dataset in CSV format
-- Adjusting training parameters (epochs, learning rate, etc.)
-- Modifying the model architecture in the trainer
-- Adding new poem styles to the generator
-- Enhancing the refinement process in the refiner module
+Poetron uses a GPT-2 model fine-tuned on poetry datasets, enabling it to generate creative and contextually relevant poems across multiple styles. The model understands poetic structure, rhythm, and imagery to create original compositions.
+
+---
+
+Enjoy creating beautiful poetry with Poetron! 

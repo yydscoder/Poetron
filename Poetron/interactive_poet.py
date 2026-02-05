@@ -15,7 +15,7 @@ from utils import validate_style, export_poem
 
 def main():
     """Interactive poetry generation interface."""
-    print("🎭 Welcome to Poetron - AI-Powered Poetry Generator!")
+    print("Welcome to Poetron - AI-Powered Poetry Generator!")
     print("=" * 60)
     print("I can help you create beautiful poems in various styles.")
     print()
@@ -49,7 +49,7 @@ def main():
             selected_style = styles[choice]
             break
         else:
-            print("\n❌ Invalid choice. Please select 1, 2, 3, or 4.\n")
+            print("\nInvalid choice. Please select 1, 2, 3, or 4.\n")
     
     if choice == '4':
         return
@@ -102,7 +102,7 @@ def main():
             max_new_tokens=max_new_tokens
         )
         
-        print("✨ Your poem is ready!")
+        print("Your poem is ready!")
         print("=" * 50)
         print(poem)
         print("=" * 50)
@@ -112,9 +112,9 @@ def main():
         export_choice = input("Would you like to save this poem to a file? (y/n): ").strip().lower()
         if export_choice in ['y', 'yes', 'ye']:
             filename = export_poem(poem, selected_style)
-            print(f"\n📝 Poem saved to: {filename}")
+            print(f"\n Poem saved to: {filename}")
         
-        print("\n🎭 Thank you for using Poetron! Would you like to create another poem?")
+        print("\nThank you for using Poetron! Would you like to create another poem?")
         another = input("(y/n): ").strip().lower()
         if another in ['y', 'yes', 'ye']:
             print()
@@ -123,7 +123,7 @@ def main():
             print("\nThank you for using Poetron! Goodbye! 🎭")
     
     except Exception as e:
-        print(f"\n❌ An error occurred while generating your poem: {str(e)}")
+        print(f"\nAn error occurred while generating your poem: {str(e)}")
         print("Please try again or contact support if the issue persists.")
 
 

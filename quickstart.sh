@@ -97,7 +97,7 @@ fi
 echo ""
 
 # Step 3: Activate venv
-echo "🔌 Step 3️⃣  Activating virtual environment..."
+echo "Step 3 Activating virtual environment..."
 source venv/bin/activate || . venv/Scripts/activate
 echo " Virtual environment activated"
 echo ""
@@ -178,7 +178,7 @@ fi
 echo ""
 
 # Test local generation
-echo "🧪 Step 6️⃣  Testing local poem generation..."
+echo "Step 6  Testing local poem generation..."
 echo "   Generating a test haiku to verify everything works..."
 python poetry_cli.py generate --style haiku --seed "test"
 echo ""
@@ -209,7 +209,7 @@ echo ""
 echo "6 Use API refinement (if you provided API key):"
 echo "    The API key will be used automatically when refining poems"
 echo ""
-echo "🚀 PRO TIP: Your trained model is now ready to generate unique poems!"
+echo "PRO TIP: Your trained model is now ready to generate unique poems!"
 echo "   The model was trained on poetry data and captures distinctive style."
 echo ""
 echo "NOTE: This installation is optimized for inference only."

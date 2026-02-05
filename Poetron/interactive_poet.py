@@ -64,7 +64,32 @@ def main():
         seed = "life"  # Default seed if none provided
         print(f"No theme provided, using default: '{seed}'")
     
+    # Suggest sensible defaults per style
+    style_defaults = {
+        'haiku': {'temperature': 0.35, 'max_new_tokens': 40},
+        'sonnet': {'temperature': 0.45, 'max_new_tokens': 200},
+        'freeverse': {'temperature': 0.6, 'max_new_tokens': 200}
+    }
+
+    defaults = style_defaults.get(selected_style, {'temperature': 0.6, 'max_new_tokens': 100})
+
     print(f"\nGenerating your {selected_style} about '{seed}'...")
+    print()
+
+    # Ask user for optional tuning parameters
+    try:
+        temp_input = input(f"Temperature (sampling) [{defaults['temperature']}]: ").strip()
+        temperature = float(temp_input) if temp_input else defaults['temperature']
+    except Exception:
+        temperature = defaults['temperature']
+
+    try:
+        tokens_input = input(f"Max new tokens [{defaults['max_new_tokens']}]: ").strip()
+        max_new_tokens = int(tokens_input) if tokens_input else defaults['max_new_tokens']
+    except Exception:
+        max_new_tokens = defaults['max_new_tokens']
+    
+    print()
     print()
     
     try:
@@ -72,7 +97,9 @@ def main():
         poem = generate_poem(
             style=selected_style,
             seed=seed,
-            model_path="./models/poetry_model"
+            model_path="./models/poetry_model",
+            temperature=temperature,
+            max_new_tokens=max_new_tokens
         )
         
         print("✨ Your poem is ready!")

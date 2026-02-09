@@ -37,7 +37,7 @@ If you prefer to set up manually:
    python interactive_poet.py
    ```
 
-### 2. Usage
+### 2. Usagesssss
 
 #### Interactive Mode
 Run the interactive poetry generator:

@@ -18,7 +18,7 @@ def refine_with_api(raw_poetry, style="haiku", seed=""):
     
     # If no API key is set via environment variable, return the raw poem without refinement
     if not api_key:
-        print("⚠️  API key not set via environment variable. Skipping API refinement.")
+        print("[WARNING] API key not set via environment variable. Skipping API refinement.")
         return raw_poetry
 
     api_url = "https://ai.hackclub.com/proxy/v1/chat/completions"
@@ -158,9 +158,9 @@ def refine_with_api(raw_poetry, style="haiku", seed=""):
             except Exception:
                 pass
 
-        print("❌ API response format unexpected or invalid, returning original")
+        print("[ERROR] API response format unexpected or invalid, returning original")
         return raw_poetry
 
     except Exception as e:
-        print(f"❌ API refinement failed: {str(e)}, returning original")
+        print(f"[ERROR] API refinement failed: {str(e)}, returning original")
         return raw_poetry

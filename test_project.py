@@ -10,24 +10,24 @@ from pathlib import Path
 def run_test(name, command, description=""):
     """Run a test and report results"""
     print(f"\n{'='*70}")
-    print(f"🧪 TEST: {name}")
+    print(f"TEST: {name}")
     if description:
-        print(f"📝 {description}")
+        print(f"{description}")
     print(f"{'='*70}")
     print(f"Running: {command}\n")
-    
+
     result = subprocess.run(command, shell=True, cwd=str(Path(__file__).parent / "Poetron"))
-    
+
     if result.returncode == 0:
-        print(f"✅ {name} PASSED")
+        print(f"[SUCCESS] {name} PASSED")
         return True
     else:
-        print(f"❌ {name} FAILED")
+        print(f"[FAILED] {name} FAILED")
         return False
 
 def main():
     print("\n" + "="*70)
-    print("🎭 POETRON - COMPREHENSIVE TEST SUITE")
+    print("POETRON - COMPREHENSIVE TEST SUITE")
     print("="*70)
     
     results = {}
@@ -104,17 +104,17 @@ def main():
     total = len(results)
     
     for test_name, result in results.items():
-        status = "✅ PASS" if result else "❌ FAIL"
+        status = "[SUCCESS] PASS" if result else "[FAILED] FAIL"
         print(f"{status} - {test_name}")
-    
+
     print(f"\nTotal: {passed}/{total} tests passed")
     print("="*70)
-    
+
     if passed == total:
-        print("\n🎉 ALL TESTS PASSED! Project is ready to use.\n")
+        print("\n[SUCCESS] ALL TESTS PASSED! Project is ready to use.\n")
         return 0
     else:
-        print(f"\n⚠️  {total - passed} test(s) failed. See errors above.\n")
+        print(f"\n[WARNING] {total - passed} test(s) failed. See errors above.\n")
         return 1
 
 if __name__ == "__main__":

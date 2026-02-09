@@ -49,7 +49,7 @@ def generate_poem(
 
         model_path_obj = Path(model_path)
         if model_path_obj.exists():
-            print(f"🧠 Loading trained LoRA model from {model_path}...")
+            print(f"[INFO] Loading trained LoRA model from {model_path}...")
 
             # Load model (Body + Brain)
             poetry_model = load_kaggle_model(model_path)

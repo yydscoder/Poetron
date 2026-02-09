@@ -43,7 +43,7 @@ def main():
         choice = input("Select a style (1-4): ").strip()
         
         if choice == '4':
-            print("\nThank you for using Poetron! Goodbye! 🎭")
+            print("\nThank you for using Poetron! Goodbye!")
             break
         elif choice in styles:
             selected_style = styles[choice]
@@ -120,7 +120,7 @@ def main():
             print()
             main()  # Recursive call to start over
         else:
-            print("\nThank you for using Poetron! Goodbye! 🎭")
+            print("\nThank you for using Poetron! Goodbye!")
     
     except Exception as e:
         print(f"\nAn error occurred while generating your poem: {str(e)}")

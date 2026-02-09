@@ -17,7 +17,7 @@ class KagglePoetryModel:
         self.model_path = Path(model_path)
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        print(f"🔧 Loading model from {model_path} on device: {self.device}")
+        print(f"[INFO] Loading model from {model_path} on device: {self.device}")
 
         # Check if model path exists
         if not self.model_path.exists():
@@ -50,24 +50,24 @@ class KagglePoetryModel:
         # Add special tokens that were used during training to match the vocabulary size
         special_tokens = {'additional_special_tokens': ['<POETRY>', '</POETRY>']}
         num_added_toks = tokenizer.add_special_tokens(special_tokens)
-        print(f"🏷️  Added {num_added_toks} special tokens to match trained model")
+        print(f"[INFO] Added {num_added_toks} special tokens to match trained model")
         
         # Resize model embeddings to accommodate the new tokens BEFORE loading the adapter
         base_model.resize_token_embeddings(len(tokenizer))
-        print(f"🔄 Resized model embeddings to {len(tokenizer)} to match trained model")
+        print(f"[INFO] Resized model embeddings to {len(tokenizer)} to match trained model")
 
-        print("🧠 Attaching LoRA adapter from {}...".format(self.model_path))
+        print("[INFO] Attaching LoRA adapter from {}...".format(self.model_path))
         # Now load the adapter with the properly sized base model
         self.model = PeftModel.from_pretrained(base_model, str(self.model_path))
 
-        print("⚡ Moving to device...")
+        print("[INFO] Moving to device...")
         self.model.to(self.device)
         self.model.eval()
 
         # Store the tokenizer as an instance variable
         self.tokenizer = tokenizer
 
-        print("✨ Your Poet is awake and ready!")
+        print("[SUCCESS] Your Poet is awake and ready!")
 
     def _load_merged_model(self):
         """Load merged fine-tuned model"""
@@ -87,13 +87,13 @@ class KagglePoetryModel:
         self.tokenizer.pad_token = self.tokenizer.eos_token
 
         # Add the custom tags you created during training
-        print("🏷️  Adding special poetry tokens...")
+        print("[INFO] Adding special poetry tokens...")
         self.tokenizer.add_special_tokens({'additional_special_tokens': ['<POETRY>', '</POETRY>']})
 
         # Resize model embeddings to fit new tokens (only if model exists)
         if hasattr(self, 'model'):
             self.model.resize_token_embeddings(len(self.tokenizer))
-            print(f"✨ Tokenizer loaded (vocab size: {len(self.tokenizer)})")
+            print(f"[SUCCESS] Tokenizer loaded (vocab size: {len(self.tokenizer)})")
 
         return self.tokenizer
 

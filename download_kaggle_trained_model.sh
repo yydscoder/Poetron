@@ -21,5 +21,3 @@ else
     echo "Download failed. Check your internet connection and Kaggle dataset URL."
     exit 1
 fi
-aaaaaaa
-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaassssssaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa

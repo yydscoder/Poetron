@@ -10,7 +10,7 @@ import sys
 import os
 from pathlib import Path
 import zipfile
-import requests
+# Delay importing requests until after dependencies are installed
 from urllib.parse import urlparse
 import shutil
 
@@ -112,6 +112,9 @@ def download_kaggle_model():
     print("\n[INFO] Downloading pre-trained Kaggle model...")
     print("   This model was trained specifically for poetry generation.")
 
+    # Import requests here after dependencies have been installed
+    import requests
+
     # Create models directory
     models_dir = Path("./models/kaggle_trained_model")
     models_dir.mkdir(parents=True, exist_ok=True)
@@ -196,11 +199,22 @@ def test_local_generation():
             print("[SUCCESS] Test generation successful!")
             print(result.stdout)
         else:
-            print("[WARNING] Test generation had some issues, but continuing...")
-            print("STDOUT:", result.stdout)
-            print("STDERR:", result.stderr)
+            # Check if the error is related to Visual C++ Redistributable
+            if "Microsoft Visual C++ Redistributable is not installed" in result.stderr or "WinError 126" in result.stderr or "c10.dll" in result.stderr:
+                print("[INFO] Test generation skipped due to missing Visual C++ Redistributable.")
+                print("This is expected if the redistributable is not installed.")
+                print("Please install from: https://aka.ms/vs/17/release/vc_redist.x64.exe")
+            else:
+                print("[WARNING] Test generation had some issues, but continuing...")
+                print("STDOUT:", result.stdout)
+                print("STDERR:", result.stderr)
     except Exception as e:
-        print(f"[WARNING] Could not run test generation: {e}")
+        if "WinError 126" in str(e) or "c10.dll" in str(e):
+            print("[INFO] Test generation skipped due to missing Visual C++ Redistributable.")
+            print("This is expected if the redistributable is not installed.")
+            print("Please install from: https://aka.ms/vs/17/release/vc_redist.x64.exe")
+        else:
+            print(f"[WARNING] Could not run test generation: {e}")
 
 
 def run_interactive_poet():
@@ -215,8 +229,20 @@ def run_interactive_poet():
     except ImportError as e:
         print(f"[ERROR] Could not import interactive_poet: {e}")
         print("Please make sure interactive_poet.py exists in the current directory.")
+    except OSError as e:
+        if "WinError 126" in str(e) or "c10.dll" in str(e) or "Microsoft Visual C++ Redistributable" in str(e):
+            print("[ERROR] Error running interactive poet: Missing Visual C++ Redistributable.")
+            print("Please install from: https://aka.ms/vs/17/release/vc_redist.x64.exe")
+            print("Then run 'python interactive_poet.py' separately.")
+        else:
+            print(f"[ERROR] Error running interactive poet: {e}")
     except Exception as e:
-        print(f"[ERROR] Error running interactive poet: {e}")
+        if "WinError 126" in str(e) or "c10.dll" in str(e):
+            print("[ERROR] Error running interactive poet: Missing Visual C++ Redistributable.")
+            print("Please install from: https://aka.ms/vs/17/release/vc_redist.x64.exe")
+            print("Then run 'python interactive_poet.py' separately.")
+        else:
+            print(f"[ERROR] Error running interactive poet: {e}")
 
 
 def show_next_steps():
@@ -252,6 +278,73 @@ def show_next_steps():
     print("")
     if "POETRON_API_KEY" in os.environ:
         print("API KEY: The API key you provided is available for use in this session.")
+
+
+def check_visual_cpp_redist():
+    """Check if Visual C++ Redistributable is installed on Windows"""
+    if os.name == 'nt':  # Windows
+        import winreg
+        try:
+            # Check for Visual C++ Redistributable by looking at registry
+            # This is a common location for Visual C++ Redistributable installations
+            registry_paths = [
+                r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+                r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+            ]
+            
+            # Track which versions we find
+            found_2015_2019_2022 = False  # This is the version PyTorch typically needs
+            found_other_versions = []
+            
+            for reg_path in registry_paths:
+                try:
+                    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path) as key:
+                        i = 0
+                        while True:
+                            try:
+                                subkey_name = winreg.EnumKey(key, i)
+                                with winreg.OpenKey(key, subkey_name) as subkey:
+                                    try:
+                                        display_name = winreg.QueryValueEx(subkey, "DisplayName")[0]
+                                        if "Microsoft Visual C++" in display_name and "Redistributable" in display_name:
+                                            print(f"[INFO] Found: {display_name}")
+                                            
+                                            # Check if this is the 2015-2022 version that PyTorch needs
+                                            if any(year in display_name for year in ["2015", "2017", "2019", "2022"]):
+                                                found_2015_2019_2022 = True
+                                            else:
+                                                found_other_versions.append(display_name)
+                                    except FileNotFoundError:
+                                        pass
+                                i += 1
+                            except OSError:
+                                break
+                except FileNotFoundError:
+                    continue
+            
+            # If we found the right version, return success
+            if found_2015_2019_2022:
+                print("[INFO] Required Visual C++ 2015-2022 Redistributable found.")
+                return True
+            else:
+                print("\n[WARNING] Required Microsoft Visual C++ 2015-2022 Redistributable may not be installed.")
+                print("PyTorch typically requires Visual C++ 2015-2022 Redistributable.")
+                
+                if found_other_versions:
+                    print(f"[INFO] Found other versions: {', '.join(found_other_versions)}")
+                    print("However, these may not be compatible with the current PyTorch version.")
+                
+                print("Download from: https://aka.ms/vs/17/release/vc_redist.x64.exe")
+                print("After installation, please restart this script.")
+                return False
+        except Exception as e:
+            # If we can't check the registry, warn the user anyway
+            print(f"\n[INFO] Could not check Visual C++ Redistributable installation: {e}")
+            print("If you encounter DLL load errors, install Visual C++ Redistributable from:")
+            print("https://aka.ms/vs/17/release/vc_redist.x64.exe")
+            return True  # Continue anyway if we can't check
+    else:
+        return True  # Not Windows, so not applicable
 
 
 def main():
@@ -301,6 +394,12 @@ def main():
 
     # Show next steps
     show_next_steps()
+
+    # Check for Visual C++ Redistributable on Windows before running interactive mode
+    if not check_visual_cpp_redist():
+        print("\n[ERROR] Visual C++ Redistributable check failed. Skipping interactive mode.")
+        print("Please install the redistributable and run 'python interactive_poet.py' separately.")
+        return
 
     print("\n[INFO] Starting interactive poet mode...")
     # Run the interactive poet

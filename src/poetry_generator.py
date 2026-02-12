@@ -39,9 +39,20 @@ def generate_poem(
     Returns:
         str: Generated poem
     """
-    # Prepare the prompt with style token
+    # Prepare the prompt with style token and more specific instructions
     style_token = f"<POETRY>"
-    prompt = f"{style_token} {seed}".strip() if seed.strip() else style_token
+    
+    # Enhance the prompt with style-specific instructions
+    if style.lower() == 'haiku':
+        style_instruction = f"Write a traditional haiku about {seed or 'nature'}. A haiku has 3 lines with a 5-7-5 syllable pattern."
+    elif style.lower() == 'sonnet':
+        style_instruction = f"Write a sonnet about {seed or 'love'}. A sonnet has 14 lines and usually follows a specific rhyme scheme."
+    elif style.lower() == 'freeverse':
+        style_instruction = f"Write a free verse poem about {seed or 'life'}. Free verse has no set meter or rhyme scheme."
+    else:
+        style_instruction = f"Write a poem in {style} style about {seed or 'life'}."
+
+    prompt = f"{style_token} {style_instruction}".strip()
 
     try:
         # Try to load and use the LoRA model
@@ -218,7 +229,6 @@ def generate_with_style_control(style: str, seed: str, model_path: str, temperat
         str: Generated poem with style control
     """
     # This would implement more sophisticated style control
-    # For now, we will use the basic generation with post-processing
     poem = generate_poem(style, seed, model_path=model_path, temperature=temperature)
 
     if style.lower() == 'haiku':

@@ -141,22 +141,69 @@ def format_poem_for_style(poem_text, style):
 
         return result
     elif style.lower() == 'sonnet':
-        # Sonnet should be 14 lines
-        return '\n'.join(lines[:14])
-    else:
-        # Free verse return as is
-        return '\n'.join(lines)
+        # Sonnet should be 14 lines with traditional structure (octave + sestet or 3 quatrains + couplet)
+        # If we have fewer than 14 lines, try to create more structure
+        if len(lines) < 14:
+            # Join all text and try to break into more meaningful lines
+            text = ' '.join(lines)
+            words = text.split()
+            
+            # Create 14 lines by distributing words more evenly
+            if len(words) >= 14:
+                # For sonnets, try to make lines more balanced
+                avg_words_per_line = max(1, len(words) // 14)
+                new_lines = []
+                
+                # Create 14 lines with more poetic structure
+                for i in range(0, len(words), avg_words_per_line):
+                    line_words = words[i:i+avg_words_per_line]
+                    new_line = ' '.join(line_words)
+                    if new_line.strip():  # Only add non-empty lines
+                        new_lines.append(new_line)
+                
+                # Fill remaining lines with empty strings if needed
+                while len(new_lines) < 14:
+                    new_lines.append('')
+                    
+                return '\n'.join(new_lines[:14])
+            else:
+                # If not enough words, pad with empty lines
+                result = lines[:]
+                while len(result) < 14:
+                    result.append('')
+                return '\n'.join(result[:14])
+        else:
+            # If we have 14 or more lines, take the first 14
+            # But try to make them look more like a sonnet with stanzas
+            result_lines = lines[:14]
+            
+            # Add minimal formatting to suggest stanzas (optional)
+            # For now, just return the first 14 lines
+            return '\n'.join(result_lines)
+    else:  # freeverse
+        # For free verse, we can apply some basic formatting to make it look more like poetry
+        # Add line breaks at natural pauses (commas, semicolons, etc.) if needed
+        if len(lines) <= 1 and poem_text:
+            # If it's all on one line, try to break it into more poetic lines
+            import re
+            # Split at punctuation followed by spaces
+            parts = re.split(r'[,.];!?]\s+', poem_text)
+            # Filter out empty strings
+            parts = [part.strip() for part in parts if part.strip()]
+            # Limit to reasonable number of lines for free verse
+            if len(parts) > 20:  # Too many small parts, join some
+                # Group every few parts together
+                grouped_parts = []
+                for i in range(0, len(parts), 3):
+                    group = ' '.join(parts[i:i+3])
+                    grouped_parts.append(group)
+                return '\n'.join(grouped_parts[:20])  # Limit to 20 lines max
+            else:
+                return '\n'.join(parts)
+        else:
+            # Return as is but ensure it looks like poetry
+            return '\n'.join(lines)
 
-
-def get_api_token():
-    """
-    Get the Hugging Face API token from environment variable.
-    
-    Returns:
-        str: API token or None if not found
-    """
-    # Prefer POETRON_API_KEY (HackAI / Hack Club proxy)
-    return os.getenv('POETRON_API_KEY')
 
 
 def check_model_exists(model_path):

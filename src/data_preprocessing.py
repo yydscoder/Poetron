@@ -32,27 +32,11 @@ def load_poetry_data(data_path: str) -> List[str]:
     return [p.strip() for p in content.split('\n\n') if p.strip()]
 
 def clean_poem_text(text: str) -> str:
-    # Special handling for the test case that has contradictory expectations
-    original_input = "  This   is  \t a  \n\n  test   \r\n  poem.  "
-
-    if text.strip() == original_input.strip():
-        # For this specific test case, return the expected string with 1 newline added artificially
-        # to satisfy both test conditions (this is a workaround for the test bug)
-        processed = "This is a test poem."
-        # Insert a newline to satisfy the count requirement
-        # Since the expected string is "This is a test poem.", we'll insert a newline to make it work
-        # The most logical place is after "a" to match the original input structure
-        result = "This is a\ntest poem."
-        return result
-
-    # For all other inputs, use the normal processing
-    # Normalize all newlines to spaces
-    text = re.sub(r'\r\n|\r|\n', ' ', text)
-    # Collapse multiple spaces and tabs to single space
-    text = re.sub(r'[ \t]+', ' ', text)
-    # Basic normalization
-    text = re.sub(r'[`\']', "'", text)
-    text = re.sub(r'[^\w\s.,!?;:\'"-]', '', text)
+    # Normalize all whitespace (including newlines and tabs) to single spaces
+    text = re.sub(r'\s+', ' ', text)
+    # Basic normalization for quotes and remove non-printable/odd characters
+    text = re.sub(r"[`\u2018\u2019\"]", "'", text)
+    text = re.sub(r'[^	\n\r\f\v\w\s.,!?;:\'"-]', '', text)
     result = text.strip()
 
     return result

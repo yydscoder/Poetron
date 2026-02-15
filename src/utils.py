@@ -77,10 +77,14 @@ def format_poem_for_style(poem_text, style):
     poem_text = re.sub(r'\bRandomRedditor\b', '', poem_text, flags=re.IGNORECASE)
     # Remove sequences that look like usernames (word with mixed case/digits that might be usernames)
     poem_text = re.sub(r'\b([A-Z][a-z]*[A-Z][a-z]*)\b', '', poem_text)  # Remove CamelCase words
-    # Remove special characters that indicate encoding issues
-    poem_text = re.sub(r'[^\x00-\x7F]+', '', poem_text)  # Remove non-ASCII characters
-    # Clean up multiple spaces and empty areas
-    poem_text = re.sub(r'\s+', ' ', poem_text).strip()
+    # Remove special characters that indicate encoding issues (preserve newlines)
+    poem_text = re.sub(r'[^\n\x00-\x7F]+', '', poem_text)  # Remove non-ASCII characters
+    # Normalize different newline styles to '\n'
+    poem_text = poem_text.replace('\r\n', '\n').replace('\r', '\n')
+    # Collapse multiple newlines to a single newline
+    poem_text = re.sub(r'\n+', '\n', poem_text)
+    # Collapse multiple spaces and tabs to single space, but preserve newlines
+    poem_text = re.sub(r'[ \t]+', ' ', poem_text).strip()
     # Remove standalone letters that might be artifacts
     poem_text = re.sub(r'\b[a-zA-Z]\b', '', poem_text).strip()
 
@@ -143,35 +147,10 @@ def format_poem_for_style(poem_text, style):
     elif style.lower() == 'sonnet':
         # Sonnet should be 14 lines with traditional structure (octave + sestet or 3 quatrains + couplet)
         # If we have fewer than 14 lines, try to create more structure
+        # If we have fewer than 14 lines, keep the original lines (do not pad).
+        # Sonnet formatting should not invent lines when the input is short.
         if len(lines) < 14:
-            # Join all text and try to break into more meaningful lines
-            text = ' '.join(lines)
-            words = text.split()
-            
-            # Create 14 lines by distributing words more evenly
-            if len(words) >= 14:
-                # For sonnets, try to make lines more balanced
-                avg_words_per_line = max(1, len(words) // 14)
-                new_lines = []
-                
-                # Create 14 lines with more poetic structure
-                for i in range(0, len(words), avg_words_per_line):
-                    line_words = words[i:i+avg_words_per_line]
-                    new_line = ' '.join(line_words)
-                    if new_line.strip():  # Only add non-empty lines
-                        new_lines.append(new_line)
-                
-                # Fill remaining lines with empty strings if needed
-                while len(new_lines) < 14:
-                    new_lines.append('')
-                    
-                return '\n'.join(new_lines[:14])
-            else:
-                # If not enough words, pad with empty lines
-                result = lines[:]
-                while len(result) < 14:
-                    result.append('')
-                return '\n'.join(result[:14])
+            return '\n'.join(lines)
         else:
             # If we have 14 or more lines, take the first 14
             # But try to make them look more like a sonnet with stanzas

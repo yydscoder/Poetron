@@ -70,8 +70,8 @@ class TestDataPreprocessing(unittest.TestCase):
         
         # Should remove extra whitespace
         self.assertNotIn("  ", cleaned)
-        # Should normalize line breaks
-        self.assertEqual(cleaned.count('\n'), 1)  # Only one newline between sentences
+        # Should normalize line breaks (allow 0 or 1 newline)
+        self.assertLessEqual(cleaned.count('\n'), 1)  # At most one newline between sentences
         # Should strip leading/trailing whitespace
         self.assertEqual(cleaned, "This is a test poem.")
     

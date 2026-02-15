@@ -5,6 +5,9 @@ import torch
 from pathlib import Path
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 from peft import PeftModel
+import re
+from typing import List
+from datetime import datetime
 
 class KagglePoetryModel:
     def __init__(self, model_path: str = "models/kaggle_trained_model"):
@@ -42,7 +45,7 @@ class KagglePoetryModel:
 
     def _load_adapter_model(self):
         """Load base model + LoRA adapter (Brain + Body)"""
-        print("📚 Loading base GPT-2 (the Body)...")
+        print("Loading base GPT-2 (the Body)...")
         # Load base model and tokenizer together to ensure they're aligned
         base_model = GPT2LMHeadModel.from_pretrained("gpt2")
         tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
@@ -74,7 +77,7 @@ class KagglePoetryModel:
         print("Loading merged GPT-2 model...")
         self.model = GPT2LMHeadModel.from_pretrained(str(self.model_path))
         self.model.to(self.device)
-        print("✓ Merged model loaded")
+        print("Merged model loaded")
 
     def load_tokenizer(self):
         """Load tokenizer and add custom poetry tags"""
@@ -133,52 +136,307 @@ class KagglePoetryModel:
 
         # Use the original prompt structure but apply style-specific post-processing
         # The model was trained on poetry, so it should generate poetry naturally
-        if prompt.startswith("<POETRY>"):
-            # If the prompt already has the tag, just add the content
-            enhanced_prompt = f"{prompt} {style}: {prompt.replace('<POETRY>', '').strip()}"
+        # Normalize prompt: remove any existing tag and build a consistent prompt
+        content = prompt.replace('<POETRY>', '').strip()
+
+        if content:
+            enhanced_prompt = f"<POETRY> {style} about {content}\n<POEM>\n"
         else:
-            # Otherwise, add the tag and style info
-            enhanced_prompt = f"<POETRY> {style}: {prompt}"
+            enhanced_prompt = f"<POETRY> {style} about\n<POEM>\n"
 
         input_ids = self.tokenizer.encode(enhanced_prompt, return_tensors='pt').to(self.device)
 
+        # For haiku, use ensemble approach from the start with better sampling
+        if style and style.lower() == 'haiku':
+            sample_count = max(20, num_return_sequences * 3)
+            generation_temperature = 0.6
+            generation_top_p = 0.9
+        else:
+            sample_count = num_return_sequences
+            generation_temperature = temperature
+            generation_top_p = top_p
+
         with torch.no_grad():
             # Prepare generation arguments
+            if max_new_tokens and max_new_tokens > 0:
+                computed_max_length = len(input_ids[0]) + max_new_tokens
+            else:
+                computed_max_length = max(max_length, len(input_ids[0]) + 1)
+
             generation_kwargs = {
                 'input_ids': input_ids,
-                'max_length': min(max_length, len(input_ids[0]) + max_new_tokens),
-                'num_return_sequences': num_return_sequences,
-                'temperature': temperature,
-                'top_p': top_p,
+                'max_length': computed_max_length,
+                'num_return_sequences': sample_count,
+                'temperature': generation_temperature,
+                'top_p': generation_top_p,
                 'do_sample': True,
                 'pad_token_id': self.tokenizer.eos_token_id,
                 'attention_mask': torch.ones_like(input_ids),
-                'repetition_penalty': 1.3,
+                'repetition_penalty': 1.2,
                 'no_repeat_ngram_size': 2,
             }
             
-            # Add min_new_tokens if it's a valid parameter for this model
             if min_new_tokens > 0:
                 generation_kwargs['min_length'] = len(input_ids[0]) + min_new_tokens
 
             outputs = self.model.generate(**generation_kwargs)
 
         poems = [
-            self.tokenizer.decode(output, skip_special_tokens=True)  # Skip special tokens in output
+            self.tokenizer.decode(output, skip_special_tokens=True)
             for output in outputs
         ]
 
-        # Clean up the output to remove the prompt part
+        # Clean up the output to remove prompt-like prefixes that may be left
+        # after decoding with `skip_special_tokens=True` (which removes the
+        # <POETRY> token). We remove optional leading `<POETRY>`, the style
+        # label (e.g. "haiku:"), and whitespace.
+        import re
         cleaned_poems = []
         for poem in poems:
-            # Remove the enhanced prompt from the beginning of the generated text
-            if enhanced_prompt in poem:
-                cleaned = poem[len(enhanced_prompt):].strip()
-            else:
-                cleaned = poem.strip()
+            p = poem.strip()
+
+            # Remove any leftover tags anywhere in the output
+            p_no_tags = re.sub(r'</?POETRY>', '', p, flags=re.IGNORECASE)
+            p_no_tags = re.sub(r'</?POEM>', '', p_no_tags, flags=re.IGNORECASE)
+
+            # Remove an echoed leading style/seed header like "haiku about monkey"
+            try:
+                pattern = rf'^\s*{re.escape(style)}(?:\s+about\s+{re.escape(content)})?\s*[:\-–]?\s*'
+                p_no_tags = re.sub(pattern, '', p_no_tags, flags=re.IGNORECASE)
+            except Exception:
+                # If content contains characters that break the regex, fall back
+                p_no_tags = re.sub(rf'^\s*{re.escape(style)}\s*[:\-–]?\s*', '', p_no_tags, flags=re.IGNORECASE)
+
+            # Soft lines: minimal cleaning (keep most content)
+            soft_lines = [ln.strip() for ln in p_no_tags.splitlines() if ln.strip()]
+            # Clean up double spaces and spacing artifacts within each line
+            soft_lines = [re.sub(r'\s+', ' ', ln) for ln in soft_lines]
+            soft_lines = [re.sub(r'\s+([.,;!?])', r'\1', ln) for ln in soft_lines]
+            
+            # For haiku, try to detect if lines were incorrectly merged
+            # If we have 1-2 lines but see capital letters mid-text, try to split
+            if style and style.lower() == 'haiku' and len(soft_lines) < 3:
+                new_lines = []
+                for ln in soft_lines:
+                    # Split on capital letter preceded by lowercase (likely sentence boundary)
+                    segments = re.split(r'(?<=[a-z])\s+(?=[A-Z])', ln)
+                    new_lines.extend(segments)
+                if 2 <= len(new_lines) <= 4:
+                    soft_lines = new_lines
+
+            # Aggressive filter: drop lines that look like instructions
+            instr_patterns = [
+                r'\bwrite\b',
+                r'\bwrite\s+about\b',
+                r'\bhas\s+\d+\s+lines\b',
+                r'\bsyllable\b',
+                r'\b(first|second|third)\b',
+                r'\bthis\s+line\b',
+                r'\b\w+\s*:\s*write\b',
+            ]
+            aggressive_lines = [ln for ln in soft_lines if not any(re.search(pat, ln, re.IGNORECASE) for pat in instr_patterns)]
+
+            # Prefer aggressive result if it yields poem content; otherwise fall
+            # back to a softer cleaned result that only strips obvious leading
+            # instruction headers.
+            if aggressive_lines:
+                cleaned = '\n'.join(aggressive_lines).strip()
+                cleaned_poems.append(cleaned)
+                continue
+
+            # Soft fallback: remove only clear header-like first lines
+            soft_lines_copy = soft_lines[:]
+            if soft_lines_copy:
+                first = soft_lines_copy[0]
+                if re.search(r'^\s*(write\b|has\s+\d+\s+lines\b|\w+\s*:\s*write\b|haiku\s*:|sonnet\s*:)', first, re.IGNORECASE):
+                    soft_lines_copy.pop(0)
+
+            cleaned = '\n'.join(soft_lines_copy).strip()
             cleaned_poems.append(cleaned)
 
-        return cleaned_poems
+        # Post-generation safety check: detect common unsafe keywords and either
+        # attempt a safer regeneration or replace with a neutral fallback.
+        def _is_unsafe(text: str) -> bool:
+            if not text:
+                return False
+            # More precise patterns to catch actual unsafe content, not just individual words
+            unsafe_patterns = [
+                r'\brap(e|ed|ing)\b.*\b(woman|girl|child|boy)\b',  # rape + victim
+                r'\b(woman|girl|child|boy)\b.*\brap(e|ed|ing)\b',  # victim + rape
+                r'\bsexual(ly)?\s+(assault|violence|abuse)\b',  # sexual violence phrases
+                r'\b(kill|murder)(ed|ing)?\s+(child|baby|infant)\b',  # killing children
+                r'\bgang\s+rap(e|ed|ing)\b',  # gang rape
+                r'\bgraphic\s+violence\b', # graphic violence
+                r'\bslaughter(ed|ing)\s+(child|people|woman|men)\b',  # slaughter + victims
+                r'\b(gore|blood)\s+(splatt|dripp|pool)\b',  # gore descriptions
+            ]
+            combined = re.compile('|'.join(unsafe_patterns), flags=re.IGNORECASE)
+            return bool(combined.search(text))
+
+        # --- Haiku-specific ensemble & scoring to improve coherence ---
+        def _syllables_in_word(word: str) -> int:
+            w = word.lower().strip()
+            if not w:
+                return 0
+            # Very small heuristic syllable estimator
+            w = re.sub(r'[^a-z]', '', w)
+            if not w:
+                return 0
+            vowels = 'aeiou'
+            count = 0
+            prev_vowel = False
+            for ch in w:
+                is_v = ch in vowels
+                if is_v and not prev_vowel:
+                    count += 1
+                prev_vowel = is_v
+            # silent e heuristic
+            if w.endswith('e') and count > 1:
+                count -= 1
+            if count == 0:
+                count = 1
+            return count
+
+        def _syllables_in_line(line: str) -> int:
+            return sum(_syllables_in_word(tok) for tok in line.split())
+
+        def _is_coherent(text: str) -> bool:
+            """Check if text appears coherent (not just word salad)"""
+            lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+            if not lines or len(lines) > 5:
+                return False
+            
+            # Check for excessive capitalization mid-sentence
+            for line in lines:
+                words = line.split()
+                if len(words) > 2:
+                    # More than half the words capitalized (excluding first) = suspicious
+                    caps = sum(1 for w in words[1:] if w and w[0].isupper())
+                    if caps > len(words) / 2:
+                        return False
+            
+            # Check for reasonable word count per line
+            for line in lines:
+                word_count = len(line.split())
+                if word_count < 2 or word_count > 15:
+                    return False
+            
+            return True
+
+        def _haiku_score(text: str) -> int:
+            # Lower is better. Penalize deviation from 5-7-5 and non-3-line structure.
+            lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+            if len(lines) != 3:
+                # heavy penalty for wrong line count
+                return 1000 + abs(len(lines) - 3) * 50
+            
+            # Penalize lines that are too short or too long in characters
+            for line in lines:
+                if len(line) < 3:  # too short
+                    return 1000
+                if len(line) > 60:  # too long for a haiku line
+                    return 500
+            
+            s1 = _syllables_in_line(lines[0])
+            s2 = _syllables_in_line(lines[1])
+            s3 = _syllables_in_line(lines[2])
+            
+            # Syllable deviation score
+            score = abs(s1 - 5) + abs(s2 - 7) + abs(s3 - 5)
+            
+            # Penalize lines with 0 syllables (shouldn't happen but just in case)
+            if s1 == 0 or s2 == 0 or s3 == 0:
+                score += 500
+            
+            return score
+
+        # If haiku, score and select best candidates
+        if style and style.lower() == 'haiku':
+            scored_candidates = []
+            for c in cleaned_poems:
+                if c and len(c.strip()) > 5 and _is_coherent(c):  # basic sanity check
+                    score = _haiku_score(c)
+                    scored_candidates.append((score, c))
+            
+            # Sort by score (lower is better) and take top candidates
+            scored_candidates.sort(key=lambda x: x[0])
+            # Take more than needed for safety filtering
+            if scored_candidates:
+                cleaned_poems = [c for (score, c) in scored_candidates[:max(10, num_return_sequences * 2)]]
+            # If no coherent candidates, keep originals and hope safety filter helps
+            # (it will likely trigger fallback)
+
+        # Safety check with retries
+        safe_poems: List[str] = []
+        for p in cleaned_poems:
+            if _is_unsafe(p):
+                # Log the unsafe detection with timestamp, prompt and original text
+                try:
+                    with open('unsafe_generation.log', 'a', encoding='utf-8') as lf:
+                        lf.write(f"--- {datetime.utcnow().isoformat()}Z ---\n")
+                        lf.write(f"PROMPT: {enhanced_prompt}\n")
+                        lf.write("ORIGINAL_OUTPUT:\n")
+                        lf.write(p + "\n\n")
+                except Exception:
+                    pass
+
+                chosen = None
+                seen_texts = {p.strip()}
+
+                # Try up to 3 retries with stricter sampling parameters to steer away
+                # from unsafe topics. Each retry makes sampling more conservative.
+                for attempt, (t_factor, p_factor) in enumerate([(0.5, 0.5), (0.35, 0.3), (0.2, 0.2)], start=1):
+                    retry_kwargs = generation_kwargs.copy()
+                    retry_kwargs.update({
+                        'temperature': min(float(temperature) * t_factor, float(temperature)),
+                        'top_p': min(float(top_p) * p_factor, float(top_p)),
+                        'do_sample': True,
+                        'num_return_sequences': 1,
+                    })
+
+                    try:
+                        with torch.no_grad():
+                            retry_outputs = self.model.generate(**retry_kwargs)
+                        retry_text = self.tokenizer.decode(retry_outputs[0], skip_special_tokens=True)
+                    except Exception:
+                        retry_text = ''
+
+                    # Minimal cleaning
+                    retry_clean = re.sub(r'</?POETRY>', '', retry_text, flags=re.IGNORECASE)
+                    retry_clean = re.sub(r'</?POEM>', '', retry_clean, flags=re.IGNORECASE).strip()
+
+                    # Record retry attempt
+                    try:
+                        with open('unsafe_generation.log', 'a', encoding='utf-8') as lf:
+                            lf.write(f"RETRY {attempt} (temp={retry_kwargs.get('temperature')}, top_p={retry_kwargs.get('top_p')}):\n")
+                            lf.write(retry_clean + "\n\n")
+                    except Exception:
+                        pass
+
+                    if retry_clean and not _is_unsafe(retry_clean) and retry_clean.strip() not in seen_texts:
+                        chosen = retry_clean
+                        break
+                    if retry_clean:
+                        seen_texts.add(retry_clean.strip())
+
+                if chosen:
+                    safe_poems.append(chosen)
+                else:
+                    # Fallback neutral haiku if all retries fail to remove unsafe content
+                    fallback = (
+                        "Quiet moon on pond\nsoft wind counts the sleeping reeds\nstarlight keeps its watch"
+                    )
+                    try:
+                        with open('unsafe_generation.log', 'a', encoding='utf-8') as lf:
+                            lf.write(f"FINAL_FALLBACK:\n{fallback}\n\n")
+                    except Exception:
+                        pass
+                    safe_poems.append(fallback)
+            else:
+                safe_poems.append(p)
+
+        # Return the requested number of poems
+        return safe_poems[:num_return_sequences] if len(safe_poems) > num_return_sequences else safe_poems
 
     def generate_batch(
         self,
@@ -199,6 +457,7 @@ class KagglePoetryModel:
         """
         results = {}
         for prompt in prompts:
+
             poems = self.generate_poem(
                 prompt=prompt,
                 max_length=max_length,

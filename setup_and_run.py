@@ -1,410 +1,112 @@
-#!/usr/bin/env python3
 """
-Setup and Run Script for Poetron - Poetry Generation System
-This script replicates the functionality of quickstart.sh for Windows users.
-Installs dependencies, downloads the model, and runs the interactive poet.
+Poetron - Automated Setup and Launch Script
+This script handles complete setup and runs the interactive haiku generator
 """
-
 import subprocess
 import sys
 import os
 from pathlib import Path
-import zipfile
-# Delay importing requests until after dependencies are installed
-from urllib.parse import urlparse
-import shutil
 
+def print_header(message):
+    """Print a formatted header"""
+    print("\n" + "="*70)
+    print(f"  {message}")
+    print("="*70)
 
-def load_env_file():
-    """Load existing .env file if it exists"""
-    if Path(".env").exists():
-        print("[INFO] Loading existing API keys from .env file...")
-        with open(".env", "r") as env_file:
-            for line in env_file:
-                if line.strip() and not line.startswith("#"):
-                    key, value = line.strip().split('=', 1)
-                    os.environ[key] = value
-        print("[SUCCESS] API keys loaded from .env file")
-
-
-def prompt_for_api_key():
-    """Prompt for API key and optionally save to .env file"""
-    print("\nAPI Key Setup:")
-    print("If you have an API key for enhanced poetry refinement, you can enter it now.")
-    print("Otherwise, press Enter to skip and use local-only features.")
-
-    api_key = input("\nEnter your POETRON_API_KEY (for poetry refinement, optional): ")
-
-    if api_key:
-        os.environ["POETRON_API_KEY"] = api_key
-        print(" [SUCCESS] POETRON_API_KEY set for this session")
-
-        # Ask if user wants to save API key to a .env file
-        save_keys = input("\nDo you want to save this API key to a .env file for future use? (y/n): ")
-        if save_keys.lower() in ['y', 'yes']:
-            with open(".env", "a") as env_file:
-                env_file.write(f"\n# Poetron API Keys - {os.popen('date').read().strip()}\n")
-                env_file.write(f"POETRON_API_KEY={api_key}\n")
-            print("[SUCCESS] API key saved to .env file")
-
-
-def check_disk_space():
-    """Check available disk space"""
-    import shutil
-    total, used, free = shutil.disk_usage(".")
-    free_mb = free // (1024 * 1024)
-
-    print(f"\n Disk Space Analysis:")
-    print(f"   Available space: ~{free_mb}MB")
-
-    if free_mb < 500:
-        print("\n[WARNING] Insufficient disk space detected (< 500MB available)")
-        print("   This may cause installation failures with heavy dependencies.")
-        print("\nThis script will install the local model version (requires ~1.5GB+ space).")
-        input("Press Enter to continue or Ctrl+C to exit if you don't have enough space.")
-    else:
-        print("\nThis script will install the local model version (requires ~1.5GB+ space).")
-        input("Press Enter to continue...")
-
+def check_python_version():
+    """Ensure Python version is 3.8+"""
+    print("Checking Python version...")
+    if sys.version_info < (3, 8):
+        print("ERROR: Python 3.8 or higher is required")
+        print(f"Current version: {sys.version}")
+        sys.exit(1)
+    print(f"Python {sys.version_info.major}.{sys.version_info.minor} detected")
 
 def install_dependencies():
-    """Install required dependencies for inference only (CPU version)."""
-    print("\n[INFO] Installing inference-only dependencies...")
-
-    # Install PyTorch CPU-only version first (faster installation)
-    print("   Installing PyTorch CPU-only version (faster installation)...")
-    try:
-        subprocess.check_call([
-            sys.executable, "-m", "pip", "install", "torch>=2.1.0",
-            "--index-url", "https://download.pytorch.org/whl/cpu", "--verbose"
-        ])
-        print("    [SUCCESS] PyTorch CPU-only installed")
-    except subprocess.CalledProcessError:
-        print("[ERROR] Failed to install PyTorch")
-        return False
-
-    # Install other dependencies
+    """Install required Python packages"""
+    print("\nInstalling dependencies (this may take a few minutes)...")
+    
     packages = [
-        ("transformers>=4.44.0", "Transformers (model handling)"),
-        ("peft>=0.11.0", "PEFT (Parameter Efficient Fine-Tuning for using your trained model)"),
-        ("tokenizers>=0.19.0", "Tokenizers (text processing)"),
-        ("huggingface_hub>=0.25.1", "HuggingFace Hub (for model downloads)"),
-        ("click>=8.0.0", "Click (for CLI interface)"),
-        ("requests>=2.25.0", "Requests (for HTTP requests)"),
-        ("kagglehub>=0.2.0", "KaggleHub (for Kaggle model downloads)")
+        "torch>=2.1.0",
+        "transformers>=4.44.0",
+        "peft>=0.11.0",
+        "tokenizers>=0.19.0",
+        "huggingface_hub>=0.25.1",
+        "click>=8.0.0",
+        "requests>=2.25.0"
     ]
-
-    for package, description in packages:
-        print(f"   Installing {description}...")
-        try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", package, "--verbose"])
-            print(f"   [SUCCESS] {description.split(' ')[0]} installed")
-        except subprocess.CalledProcessError:
-            print(f"[ERROR] Failed to install {package}")
-            return False
-
-    print("\n[SUCCESS] All inference-only dependencies installed (~1.0-1.5GB total)")
-    return True
-
-
-def download_kaggle_model():
-    """Download the trained Kaggle model"""
-    print("\n[INFO] Downloading pre-trained Kaggle model...")
-    print("   This model was trained specifically for poetry generation.")
-
-    # Import requests here after dependencies have been installed
-    import requests
-
-    # Create models directory
-    models_dir = Path("./models/kaggle_trained_model")
-    models_dir.mkdir(parents=True, exist_ok=True)
-
-    # Define download URL and path
-    download_url = "https://www.kaggle.com/api/v1/datasets/download/xongkoro/flavourtownpoetrongeneratormodel"
-    downloads_path = Path.home() / "Downloads"
-    model_zip_path = downloads_path / "flavourtownpoetrongeneratormodel.zip"
-
-    # Download the model if not already present
-    if not model_zip_path.exists():
-        print("    Fetching model from Kaggle (this may take 1-2 minutes)...")
-        print("   Model size: ~1.1GB")
-
-        try:
-            response = requests.get(download_url)
-            response.raise_for_status()
-
-            with open(model_zip_path, 'wb') as f:
-                f.write(response.content)
-
-            print("[SUCCESS] Model downloaded successfully")
-        except Exception as e:
-            print(f"[ERROR] Error downloading model: {e}")
-            return False
-    else:
-        print("    Using cached model file from ~/Downloads/")
-
-    # Extract the model
-    print("    Extracting model files...")
+    
     try:
-        with zipfile.ZipFile(model_zip_path, 'r') as zip_ref:
-            zip_ref.extractall(models_dir)
-        print("[SUCCESS] Model downloaded and extracted successfully")
-    except Exception as e:
-        print(f"[ERROR] Error extracting model: {e}")
+        # Upgrade pip first
+        print("Upgrading pip...")
+        subprocess.check_call([
+            sys.executable, "-m", "pip", "install", "--upgrade", "pip"
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        # Install packages
+        print("Installing required packages...")
+        subprocess.check_call([
+            sys.executable, "-m", "pip", "install"
+        ] + packages, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        print("Dependencies installed successfully")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"ERROR: Failed to install dependencies: {e}")
+        print("\nPlease install manually:")
+        print("pip install torch transformers peft tokenizers huggingface_hub click requests")
         return False
 
-    # Create model path link/copy
-    print("\nCreating model path link...")
-    final_model_path = models_dir / "kaggle" / "working" / "poetry_model" / "final_poetry_lora"
+def check_models_exist():
+    """Check if any model files exist"""
+    model_paths = [
+        Path("models/poetry_model"),
+        Path("models/kaggle_trained_model")
+    ]
+    
+    for path in model_paths:
+        if path.exists() and any(path.iterdir()):
+            return True
+    return False
 
-    poetry_models_dir = Path("./models")
-    poetry_models_dir.mkdir(exist_ok=True)
-
-    target_model_path = poetry_models_dir / "poetry_model"
-
-    # On Windows, we'll copy instead of creating a symlink
-    if target_model_path.exists():
-        shutil.rmtree(target_model_path)
-
-    if final_model_path.exists():
-        shutil.copytree(final_model_path, target_model_path)
-        print("[SUCCESS] Model path copied successfully")
-    else:
-        print(f"[ERROR] Expected model path does not exist: {final_model_path}")
-        return False
-
-    # Verify the model is accessible
-    print("\nVerifying model path...")
-    if (target_model_path / "adapter_config.json").exists():
-        print("[SUCCESS] Model verification successful - files found")
-    else:
-        print("[ERROR] Model verification failed - files not accessible")
-        return False
-
-    return True
-
-
-def test_local_generation():
-    """Test local poem generation"""
-    print("\n[INFO] Testing local poem generation...")
-    print("   Generating a test haiku to verify everything works...")
-
+def run_interactive_haiku():
+    """Launch the interactive haiku generator"""
+    print("\nLaunching interactive haiku generator...")
+    print("Note: First-time AI model loading may take a moment")
+    print("      (rule-based generator is instant)\n")
+    
     try:
-        # Try to run the CLI to generate a test haiku
-        result = subprocess.run([
-            sys.executable, "poetry_cli.py", "generate", "--style", "haiku", "--seed", "test"
-        ], capture_output=True, text=True)
-
-        if result.returncode == 0:
-            print("[SUCCESS] Test generation successful!")
-            print(result.stdout)
-        else:
-            # Check if the error is related to Visual C++ Redistributable
-            if "Microsoft Visual C++ Redistributable is not installed" in result.stderr or "WinError 126" in result.stderr or "c10.dll" in result.stderr:
-                print("[INFO] Test generation skipped due to missing Visual C++ Redistributable.")
-                print("This is expected if the redistributable is not installed.")
-                print("Please install from: https://aka.ms/vs/17/release/vc_redist.x64.exe")
-            else:
-                print("[WARNING] Test generation had some issues, but continuing...")
-                print("STDOUT:", result.stdout)
-                print("STDERR:", result.stderr)
+        # Run the interactive haiku generator
+        subprocess.call([sys.executable, "interactive_haiku.py"])
+    except KeyboardInterrupt:
+        print("\n\nGenerator closed.")
     except Exception as e:
-        if "WinError 126" in str(e) or "c10.dll" in str(e):
-            print("[INFO] Test generation skipped due to missing Visual C++ Redistributable.")
-            print("This is expected if the redistributable is not installed.")
-            print("Please install from: https://aka.ms/vs/17/release/vc_redist.x64.exe")
-        else:
-            print(f"[WARNING] Could not run test generation: {e}")
-
-
-def run_interactive_poet():
-    """Run the interactive poet."""
-    print("\n[INFO] Starting Poetron - Interactive Poetry Generator!")
-    print("=" * 60)
-
-    # Import and run the interactive poet
-    try:
-        from interactive_poet import main
-        main()
-    except ImportError as e:
-        print(f"[ERROR] Could not import interactive_poet: {e}")
-        print("Please make sure interactive_poet.py exists in the current directory.")
-    except OSError as e:
-        if "WinError 126" in str(e) or "c10.dll" in str(e) or "Microsoft Visual C++ Redistributable" in str(e):
-            print("[ERROR] Error running interactive poet: Missing Visual C++ Redistributable.")
-            print("Please install from: https://aka.ms/vs/17/release/vc_redist.x64.exe")
-            print("Then run 'python interactive_poet.py' separately.")
-        else:
-            print(f"[ERROR] Error running interactive poet: {e}")
-    except Exception as e:
-        if "WinError 126" in str(e) or "c10.dll" in str(e):
-            print("[ERROR] Error running interactive poet: Missing Visual C++ Redistributable.")
-            print("Please install from: https://aka.ms/vs/17/release/vc_redist.x64.exe")
-            print("Then run 'python interactive_poet.py' separately.")
-        else:
-            print(f"[ERROR] Error running interactive poet: {e}")
-
-
-def show_next_steps():
-    """Show next steps to the user"""
-    print("\n" + "="*120)
-    print("[SUCCESS] Your Poet is awake and ready!")
-    print("="*120)
-
-    print("\nLOCAL MODEL MODE - NEXT COMMANDS:")
-    print("1. Generate a haiku:")
-    print("    python poetry_cli.py generate --style haiku --seed 'moonlight'")
-    print("")
-    print("2. Generate a sonnet:")
-    print("    python poetry_cli.py generate --style sonnet --seed 'love'")
-    print("")
-    print("3. Generate free verse:")
-    print("    python poetry_cli.py generate --style freeverse --seed 'ocean'")
-    print("")
-    print("4. Generate with export to file:")
-    print("    python poetry_cli.py generate --style haiku --export")
-    print("")
-    print("5. List available styles:")
-    print("    python poetry_cli.py list-styles")
-    print("")
-    print("6. Use API refinement (if you provided API key):")
-    print("    The API key will be used automatically when refining poems")
-    print("")
-    print("PRO TIP: Your trained model is now ready to generate unique poems!")
-    print("   The model was trained on poetry data and captures distinctive style.")
-    print("")
-    print("NOTE: This installation is optimized for inference only.")
-    print("   Training capabilities have been removed to save space.")
-    print("")
-    if "POETRON_API_KEY" in os.environ:
-        print("API KEY: The API key you provided is available for use in this session.")
-
-
-def check_visual_cpp_redist():
-    """Check if Visual C++ Redistributable is installed on Windows"""
-    if os.name == 'nt':  # Windows
-        import winreg
-        try:
-            # Check for Visual C++ Redistributable by looking at registry
-            # This is a common location for Visual C++ Redistributable installations
-            registry_paths = [
-                r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
-                r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
-            ]
-            
-            # Track which versions we find
-            found_2015_2019_2022 = False  # This is the version PyTorch typically needs
-            found_other_versions = []
-            
-            for reg_path in registry_paths:
-                try:
-                    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path) as key:
-                        i = 0
-                        while True:
-                            try:
-                                subkey_name = winreg.EnumKey(key, i)
-                                with winreg.OpenKey(key, subkey_name) as subkey:
-                                    try:
-                                        display_name = winreg.QueryValueEx(subkey, "DisplayName")[0]
-                                        if "Microsoft Visual C++" in display_name and "Redistributable" in display_name:
-                                            print(f"[INFO] Found: {display_name}")
-                                            
-                                            # Check if this is the 2015-2022 version that PyTorch needs
-                                            if any(year in display_name for year in ["2015", "2017", "2019", "2022"]):
-                                                found_2015_2019_2022 = True
-                                            else:
-                                                found_other_versions.append(display_name)
-                                    except FileNotFoundError:
-                                        pass
-                                i += 1
-                            except OSError:
-                                break
-                except FileNotFoundError:
-                    continue
-            
-            # If we found the right version, return success
-            if found_2015_2019_2022:
-                print("[INFO] Required Visual C++ 2015-2022 Redistributable found.")
-                return True
-            else:
-                print("\n[WARNING] Required Microsoft Visual C++ 2015-2022 Redistributable may not be installed.")
-                print("PyTorch typically requires Visual C++ 2015-2022 Redistributable.")
-                
-                if found_other_versions:
-                    print(f"[INFO] Found other versions: {', '.join(found_other_versions)}")
-                    print("However, these may not be compatible with the current PyTorch version.")
-                
-                print("Download from: https://aka.ms/vs/17/release/vc_redist.x64.exe")
-                print("After installation, please restart this script.")
-                return False
-        except Exception as e:
-            # If we can't check the registry, warn the user anyway
-            print(f"\n[INFO] Could not check Visual C++ Redistributable installation: {e}")
-            print("If you encounter DLL load errors, install Visual C++ Redistributable from:")
-            print("https://aka.ms/vs/17/release/vc_redist.x64.exe")
-            return True  # Continue anyway if we can't check
-    else:
-        return True  # Not Windows, so not applicable
-
+        print(f"ERROR: Failed to run generator: {e}")
+        sys.exit(1)
 
 def main():
-    """Main setup and run function that replicates quickstart.sh functionality."""
-    print("\n" + "="*120)
-    print("AI-Powered Poetry Generation System - Local Model Only")
-    print("="*120)
-    print("\nWelcome to Poetron! This script sets up the poetry generation system")
-    print("to run your trained model locally. This version focuses on inference only.")
-    print()
-
-    # Load existing .env file if it exists
-    load_env_file()
-
-    # Prompt for API key
-    prompt_for_api_key()
-
-    # Check disk space
-    check_disk_space()
-
-    # Verify we're in the right directory
-    if not Path("interactive_poet.py").exists():
-        print("[ERROR] Cannot find interactive_poet.py in current directory")
-        print("Make sure you're running this script from the Poetron directory")
-        return
-
-    # Check Python
-    print("\n[INFO] Step 1: Checking Python installation...")
-    python_version = subprocess.check_output([sys.executable, "--version"]).decode().strip()
-    print(f"[SUCCESS] Python found: {python_version}")
-
-    # Install dependencies
-    print("\n[INFO] Step 4: Installing inference-only dependencies...")
+    """Main setup and run workflow"""
+    print_header("POETRON - AI Haiku Generator Setup")
+    
+    # Step 1: Check Python version
+    check_python_version()
+    
+    # Step 2: Install dependencies
+    print_header("Installing Dependencies")
     if not install_dependencies():
-        print("[ERROR] Failed to install dependencies. Exiting.")
-        return
-
-    # Download trained model
-    print("\n[INFO] Step 5: Downloading pre-trained Kaggle model...")
-    if not download_kaggle_model():
-        print("[ERROR] Failed to setup model. Exiting.")
-        return
-
-    # Test local generation
-    print("\n[INFO] Step 6: Testing local poem generation...")
-    test_local_generation()
-
-    # Show next steps
-    show_next_steps()
-
-    # Check for Visual C++ Redistributable on Windows before running interactive mode
-    if not check_visual_cpp_redist():
-        print("\n[ERROR] Visual C++ Redistributable check failed. Skipping interactive mode.")
-        print("Please install the redistributable and run 'python interactive_poet.py' separately.")
-        return
-
-    print("\n[INFO] Starting interactive poet mode...")
-    # Run the interactive poet
-    run_interactive_poet()
-
+        sys.exit(1)
+    
+    # Step 3: Check for models
+    print_header("Checking Models")
+    if check_models_exist():
+        print("Model files found - AI generation available")
+    else:
+        print("No model files found - will use rule-based generator")
+        print("(Rule-based generator produces quality haikus)")
+    
+    # Step 4: Launch interactive generator
+    print_header("Setup Complete - Starting Generator")
+    run_interactive_haiku()
 
 if __name__ == "__main__":
     main()

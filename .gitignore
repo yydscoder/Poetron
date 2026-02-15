@@ -60,11 +60,36 @@ config.local
 # Logs
 *.log
 logs/
+stderr.txt
+stdout.txt
 
 # Testing
 .pytest_cache/
 .coverage
 htmlcov/
+test_*.py
+!tests/test_*.py
+demo*.py
+verify_setup.py
+
+# Old files
+*_NEW.md
+*_OLD.md
+QUICK_START.md
+DUAL_GENERATOR_INFO.md
+GPT_NEO_LIMITATIONS.md
+start_haiku.py
+interactive_poet_pretrained.py
+interactive_poet.py
+poetry_cli.py
+download_data.py
+download_kaggle_trained_model.sh
+quickstart.sh
+uninstall.py
+
+# Generated haiku files
+haiku.txt
+haikus_*.txt
 
 # OS
 .DS_Store

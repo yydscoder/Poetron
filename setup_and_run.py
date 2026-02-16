@@ -8,7 +8,6 @@ import os
 from pathlib import Path
 
 def print_header(message):
-    """Print a formatted header"""
     print("\n" + "="*70)
     print(f"  {message}")
     print("="*70)

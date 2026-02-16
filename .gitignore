@@ -87,6 +87,11 @@ download_kaggle_trained_model.sh
 quickstart.sh
 uninstall.py
 
+# API integration files (not used)
+src/api_integration.py
+src/refiner.py
+src/refiner_template.py
+
 # Generated haiku files
 haiku.txt
 haikus_*.txt

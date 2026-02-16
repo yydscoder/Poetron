@@ -1,27 +1,41 @@
 # Poetron - AI Haiku Generator
 
-A Python-based haiku generator using GPT-Neo-1.3B with intelligent fallback to rule-based generation. Creates authentic 5-7-5 haikus with automatic validation and quality reporting.
+A Python-based haiku generator using GPT-Neo-1.3B (run locally on your machine) with intelligent fallback to rule-based generation. Creates authentic 5-7-5 haikus with automatic validation and quality reporting. **100% local - no external API calls or cloud services required since you will be running the trained model on your CPU, I have chosen to make it run on the CPU as I am aware that a GPU is something some people may not have.**
 
 ## Quick Start
+
+### First Time Setup
 
 ```bash
 python setup_and_run.py
 ```
 
-That's it! The script will:
+This one-time setup will:
 1. Check your Python version (3.8+ required)
 2. Install all dependencies automatically
-3. Download GPT-Neo-1.3B model (~5GB on first run)
+3. Download GPT-Neo-1.3B model (~5GB, runs locally on your CPU)
 4. Launch the interactive haiku generator
+
+### Subsequent Uses
+
+After the first setup, you can run directly:
+
+```bash
+python interactive_haiku.py
+```
+
+This skips the dependency check and model download, launching immediately.
 
 ## Features
 
-- **Dual-Generator System**: AI-powered GPT-Neo with rules-based fallback
+- **100% Local Execution**: All AI inference runs on your machine - no API keys, no cloud services, no external calls
+- **Dual-Generator System**: AI-powered GPT-Neo (local) with rules-based fallback
 - **Automatic Validation**: Checks 5-7-5 syllable patterns
 - **Quality Reporting**: Shows both AI output and corrected alternatives
 - **Interactive Interface**: Easy-to-use command-line interface
 - **Save to File**: Export your haikus to text files
 - **Adjustable Creativity**: Control generation temperature (0.1-1.0)
+- **Privacy Focused**: Your topics and haikus never leave your computer
 
 ## Example Output
 
@@ -47,18 +61,21 @@ grace fills the shore
 
 ### Dual-Generator Architecture
 
-Poetron uses a two-tier generation system:
-
-#### 1. Primary: GPT-Neo-1.3B AI Model
+Poetron uses a two-tier generation sys (Local)
 - **Model**: EleutherAI/gpt-neo-1.3B (1.3 billion parameters)
+- **Execution**: Runs locally on your CPU with no external API calls
 - **Method**: Few-shot prompting with haiku examples
-- **Inference**: CPU-based (no GPU required)
-- **Download Size**: ~5GB (cached after first run)
+- **Download Size**: ~5GB (downloaded once, cached locally)
+- **Privacy**: All generation happens on your machine
 - **Output**: Creative, varied haikus
 
 **Technical Details:**
+- Downloaded from HuggingFace Hub on first run (cached in `~/.cache/huggingface/`)
 - Uses causal language modeling with custom prompts
 - Few-shot examples guide the model toward haiku structure
+- Generates up to 60 new tokens per haiku
+- Parameters: `temperature=0.1-1.0`, `top_p=0.9`, `top_k=40`
+- Pure PyTorch inference - no API calls, no subscriptions, no usage limits
 - Generates up to 60 new tokens per haiku
 - Parameters: `temperature=0.1-1.0`, `top_p=0.9`, `top_k=40`
 
@@ -116,20 +133,23 @@ When GPT-Neo generates a haiku, Poetron:
 - Templated structure
 - Less creative variety
 - Formulaic output
-
-## Manual Setup (Optional)
-
-If you prefer manual installation:
+ or want to skip the setup script:
 
 ```bash
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Run the generator
+# 2. Run the generator directly
 python interactive_haiku.py
 ```
 
-## Requirements
+**Note**: After first-time setup with `setup_and_run.py`, you can always run `python interactive_haiku.py` directly. The model will be cached and dependencies already installed.
+# 2. Run the generator
+python interactive_haiku.py
+``` (4GB minimum)
+- **Storage**: 6GB free space (for model cache)
+- **Internet**: Required only for first-time model download (then fully offline)
+- **No API Keys**: Everything runs locally on your machine
 
 - **Python**: 3.8 or higher
 - **RAM**: 8GB+ recommended for GPT-Neo
@@ -146,34 +166,20 @@ huggingface_hub      # Model downloading
 click>=8.0.0         # CLI utilities
 ```
 
-## Project Structure
-
-```
-Poetron/
-├── setup_and_run.py           # Main entry point
-├── interactive_haiku.py       # Interactive CLI interface
-├── requirements.txt           # Python dependencies
-├── README.md                  # This file
-└── src/
-    ├── simple_haiku.py        # Rules-based generator
-    ├── pretrained_models.py   # GPT-Neo wrapper
-    └── utils.py               # Helper functions
-```
-
 ## Troubleshooting
 
-### "Model download is slow"
-- First download takes 5-10 minutes on slow connections
+### "Model download is slow" (downloads ~5GB from HuggingFace)
 - Model is cached in `~/.cache/huggingface/` after first run
-- Subsequent runs load instantly from cache
+- Subsequent runs load instantly from cache - no re-download
+- After first setup, use `python interactive_haiku.py` to skip setup checks
 
 ### "Out of memory error"
 - GPT-Neo requires ~4GB RAM during inference
 - Close other applications to free memory
-- On low-RAM systems, use rules-based generator (option 1)
+- On low-RAM systems, choose option 1 (rule-based generator) - it's instant and uses minimal RAM
 
 ### "Invalid syllable counts"
-- This is normal! GPT-Neo isn't trained on poetry
+- This is normal! GPT-Neo isn't trained specifically on poetry
 - The system shows you both versions automatically
 - Use the rules-based alternative if you need strict 5-7-5
 
@@ -181,8 +187,16 @@ Poetron/
 - Run: `pip install --upgrade -r requirements.txt`
 - Ensure Python 3.8+ with: `python --version`
 
+### "Can I use this offline?"
+- Yes! After first model download, everything runs offline
+- No internet connection needed after initial setup
+- Ensure Python 3.8+ with: `python --version`
+
 ## Technical Specifications
 
+- **Execution**: 100% local - no API calls
+- **Source**: EleutherAI via HuggingFace Hub
+- **Cache Location**: `~/.cache/huggingface/hub/`
 ### GPT-Neo-1.3B Configuration
 - **Architecture**: Transformer decoder (causal LM)
 - **Parameters**: 1.3 billion
@@ -205,7 +219,6 @@ Poetron/
 
 ### Syllable Counter Algorithm
 ```python
-# Pseudocode
 def count_syllables(word):
     1. Check exception dictionary
     2. Count vowel groups
@@ -213,25 +226,35 @@ def count_syllables(word):
     4. Handle -ed endings
     5. Return max(1, count)
 ```
+First Time
 
-## Usage Examples
-
-### Basic Generation
 ```bash
 $ python setup_and_run.py
+# Setup runs, model downloads, generator starts
 Enter haiku topic: mountain
 Number of haikus [1]: 1
 Creativity (0.1-1.0) [0.8]: 0.8
 ```
 
-### High Creativity
-```bash
-Creativity: 0.9-1.0   # More random, experimental
-```
+### After Setup (Quick Launch)
 
-### Conservative/Traditional
 ```bash
-Creativity: 0.3-0.5   # More predictable, traditional
+$ python interactive_haiku.py
+# Loads instantly from cache
+Enter haiku topic: ocean
+Number of haikus [1]: 2
+Enter haiku topic: mountain
+Number of haikus [1]: 1
+Creativity (0.1-1.0) [0.8]: 0.8
+``` (run locally)
+- **Transformers**: Hugging Face's transformer library (for local inference)
+- **PyTorch**: Deep learning framework (CPU inference)
+
+## Acknowledgments
+
+- **EleutherAI**: for GPT-Neo-1.3B open-source model
+- **Hugging Face**: for transformers library and model hosting
+- **PyTorch Team**: for the deep learning framework
 ```
 
 ### Batch Generation
@@ -246,15 +269,12 @@ This project uses:
 - **Transformers**: Hugging Face's transformer library
 - **PyTorch**: Deep learning framework
 
-## License
-
-MIT License - See LICENSE file for details
-
 ## Acknowledgments
 
 - **EleutherAI**: for GPT-Neo-1.3B model
 - **Hugging Face**: for transformers library
 - **PyTorch Team**: for the deep learning framework
+- **Kaggle**: for the dataset as well as the initial cloud training
 
 ## Version
 
@@ -262,8 +282,4 @@ Current Version: 2.0
 - Dual-generator system with intelligent fallback
 - Automatic syllable validation
 - Grammar-corrected rules-based generator
-- Clean, professional interface
 
----
-
-**Made with ❤️ for poetry enthusiasts and AI explorers**
